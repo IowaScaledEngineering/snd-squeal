@@ -40,9 +40,9 @@
 #define SDCS      34
 #define SDDET     33
 
-uint8_t desiredVolume = 1;  // 0 to 15
-uint8_t volume = 0;         // 0 to 150
-uint8_t enable = 0;         // 0 or 1
+uint8_t desiredVolume = VOL_NOM;  // 0 to 15
+uint16_t volume = 0;              // 0 to 15000
+uint8_t enable = 0;               // 0 or 1
 
 hw_timer_t * timer = NULL;
 
@@ -89,13 +89,22 @@ void IRAM_ATTR processVolume(void)
     digitalWrite(LEDA, 0);
   }
 
-  if(volume < (10 * desiredVolume * enable))
+  uint16_t deltaVolume;
+  uint16_t volumeTarget = 1000 * desiredVolume * enable;
+
+  if(volume < volumeTarget)
   {
-    volume++;
+    deltaVolume = (volumeTarget - volume);
+    if((deltaVolume > 0) && (deltaVolume < 10))
+      deltaVolume = 10;  // Make sure it goes all the way to min or max
+    volume += deltaVolume  / 10;
   }
-  else if(volume > (10 * desiredVolume * enable))
+  else if(volume > volumeTarget)
   {
-    volume--;
+    deltaVolume = (volume - volumeTarget);
+    if((deltaVolume > 0) && (deltaVolume < 10))
+      deltaVolume = 10;  // Make sure it goes all the way to min or max
+    volume -= deltaVolume  / 10;
   }
 }
 
@@ -172,7 +181,7 @@ void play(Sound *wavSound)
       {
         // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
         sampleValue = *((int16_t *)(fileBuffer+i));
-        sampleValue = sampleValue * volume / 100;
+        sampleValue = sampleValue * volume / (1000 * VOL_NOM);
         // Write twice (left & right)
         I2S.write(sampleValue);
         I2S.write(sampleValue);
@@ -205,42 +214,16 @@ void loop()
   squealSounds.push_back(new MemSound(getSqueal(15), getSquealSize(15)));
   squealSounds.push_back(new MemSound(getSqueal(16), getSquealSize(16)));
 
+  // Move I2S init here so frequency can be changed
+
   while(1)
   {
     Serial.print("Heap free: ");
     Serial.println(esp_get_free_heap_size());
 
-/*
-    Serial.println(squealSounds[0]->available());
-    Serial.println(squealSounds[1]->available());
-    Serial.println(squealSounds[2]->available());
-    Serial.println(squealSounds[3]->available());
-    Serial.println(squealSounds[4]->available());
-    Serial.println(squealSounds[5]->available());
-    Serial.println(squealSounds[6]->available());
-    Serial.println(squealSounds[7]->available());
-    Serial.println(squealSounds[8]->available());
-    Serial.println(squealSounds[9]->available());
-    Serial.println(squealSounds[10]->available());
-    Serial.println(squealSounds[11]->available());
-    Serial.println(squealSounds[12]->available());
-    Serial.println(squealSounds[13]->available());
-    Serial.println(squealSounds[14]->available());
-    Serial.println(squealSounds[15]->available());
-*/
-    
     uint8_t sampleNum = random(0, squealSounds.size());
     Serial.print("Playing... ");
     Serial.println(sampleNum);
     play(squealSounds[sampleNum]);
-
-/* 
-    Serial.println("");
-    delay(500);
-    digitalWrite(LEDA, 1);  delay(150);
-    digitalWrite(LEDA, 0);  delay(150);
-    digitalWrite(LEDB, 1);  delay(150);
-    digitalWrite(LEDB, 0);  delay(150);
- */
   }
 }
