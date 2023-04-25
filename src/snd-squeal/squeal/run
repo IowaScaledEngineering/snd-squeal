@@ -1,0 +1,20 @@
+#!/bin/bash
+
+i=1
+
+for f in $(ls -v original-audio/*.wav)
+do
+	echo; echo; echo
+	echo $f
+	echo
+	newFname=$(printf "flange%02d" $i)
+	ffmpeg -i $f -ac 1 -ar 16000 $newFname.wav
+	xxd -i -s +$(python3 findDataSection.py $newFname.wav) $newFname.wav > $newFname.h.tmp
+	
+	cat $newFname.h.tmp | sed "s/unsigned/const unsigned/" > $newFname.h
+
+	rm $newFname.wav
+	rm $newFname.h.tmp
+	
+	i=$((i+1))
+done
