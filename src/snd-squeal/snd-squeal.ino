@@ -44,58 +44,9 @@ uint8_t desiredVolume = 1;  // 0 to 15
 uint8_t volume = 0;         // 0 to 150
 uint8_t enable = 0;         // 0 or 1
 
-void setup()
-{
-  // Open serial communications and wait for port to open:
-  Serial.begin(115200);
+hw_timer_t * timer = NULL;
 
-  pinMode(VOLDN, INPUT_PULLUP);
-  pinMode(VOLUP, INPUT_PULLUP);
-  pinMode(I2S_SD, OUTPUT);
-  digitalWrite(I2S_SD, 1);  // Enable amplifier
-
-  pinMode(LEDA, OUTPUT);
-  pinMode(LEDB, OUTPUT);
-  digitalWrite(LEDA, 0);
-  digitalWrite(LEDB, 0);
-
-  pinMode(EN1, INPUT_PULLUP);
-  pinMode(EN2, INPUT_PULLUP);
-  pinMode(EN3, INPUT_PULLUP);
-  pinMode(EN4, INPUT_PULLUP);
-
-  if (!SD.begin()) {
-    Serial.println("SD card initialization failed!");
-    return;
-  }
-
-  I2S.setSckPin(I2S_BCLK);
-  I2S.setFsPin(I2S_LRCLK);
-  I2S.setDataPin(I2S_DATA);
-
-  I2S.setBufferSize(AUDIO_BUFFER_SIZE);
-
-  if(!I2S.begin(I2S_PHILIPS_MODE, 16000, 16))
-  {
-      Serial.println("Failed to initialize I2S!");
-      while (1)
-      {
-        digitalWrite(LEDA, 1);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 1);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 1);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 1);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-      }
-  }
-
-  // FIXME: read volume from NVM
-
-}
-
-void processVolume(void)
+void IRAM_ATTR processVolume(void)
 {
   static unsigned long pressTime = 0;
   static unsigned long stepTime = 0;
@@ -146,6 +97,61 @@ void processVolume(void)
   {
     volume--;
   }
+}
+
+void setup()
+{
+  // Open serial communications and wait for port to open:
+  Serial.begin(115200);
+
+  pinMode(VOLDN, INPUT_PULLUP);
+  pinMode(VOLUP, INPUT_PULLUP);
+  pinMode(I2S_SD, OUTPUT);
+  digitalWrite(I2S_SD, 1);  // Enable amplifier
+
+  pinMode(LEDA, OUTPUT);
+  pinMode(LEDB, OUTPUT);
+  digitalWrite(LEDA, 0);
+  digitalWrite(LEDB, 0);
+
+  pinMode(EN1, INPUT_PULLUP);
+  pinMode(EN2, INPUT_PULLUP);
+  pinMode(EN3, INPUT_PULLUP);
+  pinMode(EN4, INPUT_PULLUP);
+
+  if (!SD.begin()) {
+    Serial.println("SD card initialization failed!");
+    return;
+  }
+
+  I2S.setSckPin(I2S_BCLK);
+  I2S.setFsPin(I2S_LRCLK);
+  I2S.setDataPin(I2S_DATA);
+
+  I2S.setBufferSize(AUDIO_BUFFER_SIZE);
+
+  if(!I2S.begin(I2S_PHILIPS_MODE, 16000, 16))
+  {
+      Serial.println("Failed to initialize I2S!");
+      while (1)
+      {
+        digitalWrite(LEDA, 1);  digitalWrite(LEDB, 0);  delay(150);
+        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
+        digitalWrite(LEDA, 1);  digitalWrite(LEDB, 0);  delay(150);
+        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
+        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 1);  delay(150);
+        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
+        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 1);  delay(150);
+        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
+      }
+  }
+
+  // FIXME: read volume from NVM
+
+  timer = timerBegin(0, 80, true);  // 80x prescaler = 1us
+  timerAttachInterrupt(timer, &processVolume, true);
+  timerAlarmWrite(timer, 10000, true);  // 80MHz / 80 / 10000 = 10ms, autoreload true
+  timerAlarmEnable(timer);
 }
 
 void play(Sound *wavSound)
