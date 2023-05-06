@@ -12,9 +12,12 @@
 #define FILE_BUFFER_SIZE AUDIO_BUFFER_SIZE * 2
 
 // Volume
-#define VOL_MAX   15
-#define VOL_NOM   10
-#define VOL_DLY   200
+#define VOL_MAX       15
+#define VOL_NOM       10
+#define VOL_DLY       200
+#define VOL_UP_COEF   10
+#define VOL_DN_COEF   8
+
 
 // Pins
 #define EN1       9
@@ -95,16 +98,18 @@ void IRAM_ATTR processVolume(void)
   if(volume < volumeTarget)
   {
     deltaVolume = (volumeTarget - volume);
-    if((deltaVolume > 0) && (deltaVolume < 10))
-      deltaVolume = 10;  // Make sure it goes all the way to min or max
-    volume += deltaVolume  / 10;
+    if((deltaVolume > 0) && (deltaVolume < VOL_UP_COEF))
+      deltaVolume = VOL_UP_COEF;  // Make sure it goes all the way to min or max
+    volume += deltaVolume  / VOL_UP_COEF;
+//    Serial.println(volume);
   }
   else if(volume > volumeTarget)
   {
     deltaVolume = (volume - volumeTarget);
-    if((deltaVolume > 0) && (deltaVolume < 10))
-      deltaVolume = 10;  // Make sure it goes all the way to min or max
-    volume -= deltaVolume  / 10;
+    if((deltaVolume > 0) && (deltaVolume < VOL_DN_COEF))
+      deltaVolume = VOL_DN_COEF;  // Make sure it goes all the way to min or max
+    volume -= deltaVolume / VOL_DN_COEF;
+//    Serial.println(volume);
   }
 }
 
@@ -116,7 +121,7 @@ void setup()
   pinMode(VOLDN, INPUT_PULLUP);
   pinMode(VOLUP, INPUT_PULLUP);
   pinMode(I2S_SD, OUTPUT);
-  digitalWrite(I2S_SD, 1);  // Enable amplifier
+  digitalWrite(I2S_SD, 0);  // Disable amplifier
 
   pinMode(LEDA, OUTPUT);
   pinMode(LEDB, OUTPUT);
@@ -133,33 +138,11 @@ void setup()
     return;
   }
 
-  I2S.setSckPin(I2S_BCLK);
-  I2S.setFsPin(I2S_LRCLK);
-  I2S.setDataPin(I2S_DATA);
-
-  I2S.setBufferSize(AUDIO_BUFFER_SIZE);
-
-  if(!I2S.begin(I2S_PHILIPS_MODE, 16000, 16))
-  {
-      Serial.println("Failed to initialize I2S!");
-      while (1)
-      {
-        digitalWrite(LEDA, 1);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 1);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 1);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 1);  delay(150);
-        digitalWrite(LEDA, 0);  digitalWrite(LEDB, 0);  delay(150);
-      }
-  }
-
   // FIXME: read volume from NVM
 
-  timer = timerBegin(0, 80, true);  // 80x prescaler = 1us
-  timerAttachInterrupt(timer, &processVolume, true);
-  timerAlarmWrite(timer, 10000, true);  // 80MHz / 80 / 10000 = 10ms, autoreload true
+  timer = timerBegin(0, 80, true);  // Timer 0, 80x prescaler = 1us
+  timerAttachInterrupt(timer, &processVolume, false);  // level triggered
+  timerAlarmWrite(timer, 10000, true);  // 80MHz / 80 / 10000 = 10ms, autoreload
   timerAlarmEnable(timer);
 }
 
@@ -172,9 +155,20 @@ void play(Sound *wavSound)
 
   if(wavSound->open())
   {
+    I2S.setSckPin(I2S_BCLK);
+    I2S.setFsPin(I2S_LRCLK);
+    I2S.setDataPin(I2S_DATA);
+    I2S.setBufferSize(AUDIO_BUFFER_SIZE);
+
+    if(!I2S.begin(I2S_PHILIPS_MODE, wavSound->getSampleRate(), 16))
+    {
+        Serial.println("Failed to initialize I2S!");
+        return;  // Fail and try the next one
+    }
+    digitalWrite(I2S_SD, 1);  // Enable amplifier
+
     while(wavSound->available())
     {
-      processVolume();
       // Audio buffer samples are in 16-bit chunks, so multiply by two to get # of bytes to read
       bytesRead = wavSound->read(fileBuffer, (size_t)FILE_BUFFER_SIZE);
       for(i=0; i<bytesRead; i+=2)
@@ -189,6 +183,10 @@ void play(Sound *wavSound)
     }
     wavSound->close();
     I2S.flush();
+    digitalWrite(I2S_SD, 0);  // Disable amplifier
+    // FIXME: why is this delay needed?  The amplifier should shut off quickly after I2S_SD falls
+    delay(100);  // 50ms = click/pop, 75ms = no click/pop
+    I2S.end();
   }
 }
 
@@ -197,24 +195,22 @@ void loop()
   Serial.println("Starting...");
 
   std::vector<Sound *> squealSounds;
-  squealSounds.push_back(new MemSound(getSqueal(1), getSquealSize(1)));
-  squealSounds.push_back(new MemSound(getSqueal(2), getSquealSize(2)));
-  squealSounds.push_back(new MemSound(getSqueal(3), getSquealSize(3)));
-  squealSounds.push_back(new MemSound(getSqueal(4), getSquealSize(4)));
-  squealSounds.push_back(new MemSound(getSqueal(5), getSquealSize(5)));
-  squealSounds.push_back(new MemSound(getSqueal(6), getSquealSize(6)));
-  squealSounds.push_back(new MemSound(getSqueal(7), getSquealSize(7)));
-  squealSounds.push_back(new MemSound(getSqueal(8), getSquealSize(8)));
-  squealSounds.push_back(new MemSound(getSqueal(9), getSquealSize(9)));
-  squealSounds.push_back(new MemSound(getSqueal(10), getSquealSize(10)));
-  squealSounds.push_back(new MemSound(getSqueal(11), getSquealSize(11)));
-  squealSounds.push_back(new MemSound(getSqueal(12), getSquealSize(12)));
-  squealSounds.push_back(new MemSound(getSqueal(13), getSquealSize(13)));
-  squealSounds.push_back(new MemSound(getSqueal(14), getSquealSize(14)));
-  squealSounds.push_back(new MemSound(getSqueal(15), getSquealSize(15)));
-  squealSounds.push_back(new MemSound(getSqueal(16), getSquealSize(16)));
-
-  // Move I2S init here so frequency can be changed
+  squealSounds.push_back(new MemSound(getSqueal(1), getSquealSize(1), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(2), getSquealSize(2), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(3), getSquealSize(3), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(4), getSquealSize(4), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(5), getSquealSize(5), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(6), getSquealSize(6), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(7), getSquealSize(7), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(8), getSquealSize(8), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(9), getSquealSize(9), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(10), getSquealSize(10), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(11), getSquealSize(11), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(12), getSquealSize(12), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(13), getSquealSize(13), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(14), getSquealSize(14), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(15), getSquealSize(15), 16000));
+  squealSounds.push_back(new MemSound(getSqueal(16), getSquealSize(16), 16000));
 
   while(1)
   {
