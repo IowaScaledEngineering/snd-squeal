@@ -14,16 +14,14 @@
 // Volume
 #define VOL_MAX       15
 #define VOL_NOM       10
-#define VOL_DLY       200
 #define VOL_UP_COEF   10
 #define VOL_DN_COEF   8
-
 
 // Pins
 #define EN1       9
 #define EN2       10
 #define EN3       3
-#define EN4       46
+#define EN4       21
 #define LEDA      11
 #define LEDB      12
 #define VOLDN     13
@@ -42,25 +40,90 @@
 #define SDMISO    37
 #define SDCS      34
 #define SDDET     33
+#define TEST1     15
 
 uint8_t desiredVolume = VOL_NOM;  // 0 to 15
 uint16_t volume = 0;              // 0 to 15000
 uint8_t enable = 0;               // 0 or 1
 
+#define VOL_UP_BUTTON 0x01
+#define VOL_DN_BUTTON 0x02
+#define EN1_INPUT     0x10
+#define EN2_INPUT     0x20
+#define EN3_INPUT     0x40
+#define EN4_INPUT     0x80
+
+uint8_t debounce(uint8_t debouncedState, uint8_t newInputs)
+{
+  static uint8_t clock_A = 0, clock_B = 0;
+  uint8_t delta = newInputs ^ debouncedState;   //Find all of the changes
+  uint8_t changes;
+
+  clock_A ^= clock_B;                     //Increment the counters
+  clock_B  = ~clock_B;
+
+  clock_A &= delta;                       //Reset the counters if no changes
+  clock_B &= delta;                       //were detected.
+
+  changes = ~((~delta) | clock_A | clock_B);
+  debouncedState ^= changes;
+  return(debouncedState);
+}
+
 hw_timer_t * timer = NULL;
 
 void IRAM_ATTR processVolume(void)
 {
+  static uint8_t buttonsPressed = 0, oldButtonsPressed = 0;
   static unsigned long pressTime = 0;
-  static unsigned long stepTime = 0;
-  bool holdoffDone = (millis() - pressTime) > VOL_DLY;
+  uint8_t inputStatus = 0;
+
+  bool holdoffDone = (millis() - pressTime) > 200;
+
+  digitalWrite(TEST1, 1);
+
   if(holdoffDone)
   {
-    // Turn off LED if past delay time
+    // Turn off LED if past 200ms
     digitalWrite(LEDB, 0);
   }
 
-  if(!digitalRead(VOLUP) && holdoffDone)
+  // Read inputs
+  if(digitalRead(VOLUP))
+    inputStatus &= ~VOL_UP_BUTTON;
+  else
+    inputStatus |= VOL_UP_BUTTON;
+
+  if(digitalRead(VOLDN))
+    inputStatus &= ~VOL_DN_BUTTON;
+  else
+    inputStatus |= VOL_DN_BUTTON;
+
+  if(digitalRead(EN1))
+    inputStatus &= ~EN1_INPUT;
+  else
+    inputStatus |= EN1_INPUT;
+
+  if(digitalRead(EN2))
+    inputStatus &= ~EN2_INPUT;
+  else
+    inputStatus |= EN2_INPUT;
+
+  if(digitalRead(EN3))
+    inputStatus &= ~EN3_INPUT;
+  else
+    inputStatus |= EN3_INPUT;
+
+  if(digitalRead(EN4))
+    inputStatus &= ~EN4_INPUT;
+  else
+    inputStatus |= EN4_INPUT;
+
+  // Debounce
+  buttonsPressed = debounce(buttonsPressed, inputStatus);
+
+  // Find rising edge of volume up button
+  if((buttonsPressed ^ oldButtonsPressed) & (buttonsPressed & VOL_UP_BUTTON))
   {
     pressTime = millis();
     if(desiredVolume < VOL_MAX)
@@ -70,7 +133,9 @@ void IRAM_ATTR processVolume(void)
     Serial.println(desiredVolume);
     digitalWrite(LEDB, 1);
   }
-  else if(!digitalRead(VOLDN) && holdoffDone)
+
+  // Find rising edge of volume down button
+  if((buttonsPressed ^ oldButtonsPressed) & (buttonsPressed & VOL_DN_BUTTON))
   {
     pressTime = millis();
     if(desiredVolume > 0)
@@ -81,7 +146,7 @@ void IRAM_ATTR processVolume(void)
     digitalWrite(LEDB, 1);
   }
 
-  enable = !digitalRead(EN1) || !digitalRead(EN2);
+  enable = (buttonsPressed & (EN1_INPUT | EN2_INPUT | EN3_INPUT | EN4_INPUT)) ? 1 : 0;
 
   if(enable)
   {
@@ -92,6 +157,7 @@ void IRAM_ATTR processVolume(void)
     digitalWrite(LEDA, 0);
   }
 
+  // Process volume
   uint16_t deltaVolume;
   uint16_t volumeTarget = 1000 * desiredVolume * enable;
 
@@ -111,6 +177,9 @@ void IRAM_ATTR processVolume(void)
     volume -= deltaVolume / VOL_DN_COEF;
 //    Serial.println(volume);
   }
+
+  oldButtonsPressed = buttonsPressed;
+  digitalWrite(TEST1, 0);
 }
 
 void setup()
