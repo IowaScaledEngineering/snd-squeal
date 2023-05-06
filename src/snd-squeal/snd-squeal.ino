@@ -78,13 +78,12 @@ void IRAM_ATTR processVolume(void)
   static unsigned long pressTime = 0;
   uint8_t inputStatus = 0;
 
-  bool holdoffDone = (millis() - pressTime) > 200;
-
   digitalWrite(TEST1, 1);
 
-  if(holdoffDone)
+  // Turn off LED
+  uint16_t ledHoldTime = (VOL_NOM == desiredVolume) ? 1000 : 100;
+  if((millis() - pressTime) > ledHoldTime)
   {
-    // Turn off LED if past 200ms
     digitalWrite(LEDB, 0);
   }
 
