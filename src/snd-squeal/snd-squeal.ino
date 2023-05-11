@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <SD.h>
 #include <I2S.h>
+#include <Preferences.h>
 #include <vector>
 
 #include "sound.h"
@@ -42,16 +43,19 @@
 #define SDDET     33
 #define TEST1     15
 
-uint8_t desiredVolume = VOL_NOM;  // 0 to 15
+uint8_t desiredVolume = 0;        // 0 to 15
 uint16_t volume = 0;              // 0 to 15000
 uint8_t enable = 0;               // 0 or 1
 
+// Bit positions for inputs
 #define VOL_UP_BUTTON 0x01
 #define VOL_DN_BUTTON 0x02
 #define EN1_INPUT     0x10
 #define EN2_INPUT     0x20
 #define EN3_INPUT     0x40
 #define EN4_INPUT     0x80
+
+Preferences preferences;
 
 uint8_t debounce(uint8_t debouncedState, uint8_t newInputs)
 {
@@ -126,8 +130,10 @@ void IRAM_ATTR processVolume(void)
   {
     pressTime = millis();
     if(desiredVolume < VOL_MAX)
+    {
       desiredVolume++;
-      // FIXME: Add NVM volume write
+      preferences.putUChar("volume", desiredVolume);
+    }
     Serial.print("Vol Up: ");
     Serial.println(desiredVolume);
     digitalWrite(LEDB, 1);
@@ -138,8 +144,10 @@ void IRAM_ATTR processVolume(void)
   {
     pressTime = millis();
     if(desiredVolume > 0)
+    {
       desiredVolume--;
-    // FIXME: Add NVM volume write
+      preferences.putUChar("volume", desiredVolume);
+    }
     Serial.print("Vol Dn: ");
     Serial.println(desiredVolume);
     digitalWrite(LEDB, 1);
@@ -201,17 +209,18 @@ void setup()
   pinMode(EN3, INPUT_PULLUP);
   pinMode(EN4, INPUT_PULLUP);
 
-  if (!SD.begin()) {
-    Serial.println("SD card initialization failed!");
-    return;
-  }
+  delay(1000);
+  Serial.print('.');
+  delay(1000);
+  Serial.print('.');
 
   // FIXME: read volume from NVM
+  preferences.begin("squeal", false);
+  desiredVolume = preferences.getUChar("volume", 10);
 
   timer = timerBegin(0, 80, true);  // Timer 0, 80x prescaler = 1us
   timerAttachInterrupt(timer, &processVolume, false);  // level triggered
   timerAlarmWrite(timer, 10000, true);  // 80MHz / 80 / 10000 = 10ms, autoreload
-  timerAlarmEnable(timer);
 }
 
 void play(Sound *wavSound)
@@ -221,64 +230,81 @@ void play(Sound *wavSound)
   uint8_t fileBuffer[FILE_BUFFER_SIZE];
   int16_t sampleValue;
 
-  if(wavSound->open())
+  wavSound->open();
+  I2S.setSckPin(I2S_BCLK);
+  I2S.setFsPin(I2S_LRCLK);
+  I2S.setDataPin(I2S_DATA);
+  I2S.setBufferSize(AUDIO_BUFFER_SIZE);
+
+  if(!I2S.begin(I2S_PHILIPS_MODE, wavSound->getSampleRate(), 16))
   {
-    I2S.setSckPin(I2S_BCLK);
-    I2S.setFsPin(I2S_LRCLK);
-    I2S.setDataPin(I2S_DATA);
-    I2S.setBufferSize(AUDIO_BUFFER_SIZE);
-
-    if(!I2S.begin(I2S_PHILIPS_MODE, wavSound->getSampleRate(), 16))
-    {
-        Serial.println("Failed to initialize I2S!");
-        return;  // Fail and try the next one
-    }
-    digitalWrite(I2S_SD, 1);  // Enable amplifier
-
-    while(wavSound->available())
-    {
-      // Audio buffer samples are in 16-bit chunks, so multiply by two to get # of bytes to read
-      bytesRead = wavSound->read(fileBuffer, (size_t)FILE_BUFFER_SIZE);
-      for(i=0; i<bytesRead; i+=2)
-      {
-        // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
-        sampleValue = *((int16_t *)(fileBuffer+i));
-        sampleValue = sampleValue * volume / (1000 * VOL_NOM);
-        // Write twice (left & right)
-        I2S.write(sampleValue);
-        I2S.write(sampleValue);
-      }
-    }
-    wavSound->close();
-    I2S.flush();
-    digitalWrite(I2S_SD, 0);  // Disable amplifier
-    // FIXME: why is this delay needed?  The amplifier should shut off quickly after I2S_SD falls
-    delay(100);  // 50ms = click/pop, 75ms = no click/pop
-    I2S.end();
+      Serial.println("Failed to initialize I2S!");
+      return;  // Fail and try the next one
   }
+  digitalWrite(I2S_SD, 1);  // Enable amplifier
+
+  while(wavSound->available())
+  {
+    // Audio buffer samples are in 16-bit chunks, so multiply by two to get # of bytes to read
+    bytesRead = wavSound->read(fileBuffer, (size_t)FILE_BUFFER_SIZE);
+    for(i=0; i<bytesRead; i+=2)
+    {
+      // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
+      sampleValue = *((int16_t *)(fileBuffer+i));
+      sampleValue = sampleValue * volume / (1000 * VOL_NOM);
+      // Write twice (left & right)
+      I2S.write(sampleValue);
+      I2S.write(sampleValue);
+    }
+  }
+  wavSound->close();
+  I2S.flush();
+  digitalWrite(I2S_SD, 0);  // Disable amplifier
+  // FIXME: why is this delay needed?  The amplifier should shut off quickly after I2S_SD falls
+  delay(100);  // 50ms = click/pop, 75ms = no click/pop
+  I2S.end();
 }
 
 void loop()
 {
-  Serial.println("Starting...");
-
   std::vector<Sound *> squealSounds;
-  squealSounds.push_back(new MemSound(getSqueal(1), getSquealSize(1), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(2), getSquealSize(2), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(3), getSquealSize(3), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(4), getSquealSize(4), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(5), getSquealSize(5), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(6), getSquealSize(6), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(7), getSquealSize(7), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(8), getSquealSize(8), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(9), getSquealSize(9), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(10), getSquealSize(10), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(11), getSquealSize(11), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(12), getSquealSize(12), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(13), getSquealSize(13), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(14), getSquealSize(14), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(15), getSquealSize(15), 16000));
-  squealSounds.push_back(new MemSound(getSqueal(16), getSquealSize(16), 16000));
+
+  if(!SD.begin()) {
+    Serial.println("SD card initialization failed, using built-in sounds");
+    squealSounds.push_back(new MemSound(getSqueal(1), getSquealSize(1), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(2), getSquealSize(2), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(3), getSquealSize(3), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(4), getSquealSize(4), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(5), getSquealSize(5), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(6), getSquealSize(6), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(7), getSquealSize(7), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(8), getSquealSize(8), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(9), getSquealSize(9), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(10), getSquealSize(10), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(11), getSquealSize(11), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(12), getSquealSize(12), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(13), getSquealSize(13), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(14), getSquealSize(14), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(15), getSquealSize(15), 16000));
+    squealSounds.push_back(new MemSound(getSqueal(16), getSquealSize(16), 16000));
+    // Double blink blue
+    digitalWrite(LEDA, 1);
+    delay(250);
+    digitalWrite(LEDA, 0);
+    delay(250);
+    digitalWrite(LEDA, 1);
+    delay(250);
+    digitalWrite(LEDA, 0);
+    delay(250);
+  }
+  else
+  {
+    // Find files
+  }
+
+  Serial.print("Initial Volume: ");
+  Serial.println(desiredVolume);
+  timerAlarmEnable(timer);
 
   while(1)
   {

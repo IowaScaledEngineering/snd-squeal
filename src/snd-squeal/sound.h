@@ -6,7 +6,7 @@ class Sound
     uint16_t sampleRate;
 
   public:
-    virtual bool open(void);
+    virtual void open(void);
     virtual size_t available(void);
     virtual size_t read(uint8_t *buffer, size_t numBytes);
     virtual void close(void);
@@ -19,31 +19,38 @@ class Sound
 class SdSound : public Sound
 {
   char *fileName;
+  size_t fileOffset;
 
   public:
-    SdSound(char *fname)
+    SdSound(char *fname, size_t numBytes, size_t offset, uint16_t sr)
     {
       fileName = strdup(fname);
+      fileOffset = offset;
+      dataSize = numBytes;
+      sampleRate = sr;
     }
     ~SdSound()
     {
       free(fileName);
     }
-    virtual bool open(void)
+    void open(void)
     {
       Serial.println(fileName);
-      sampleRate = 0;  // FIXME
-      return true;
+      // Seek to fmt marker
+      // Validate format
+      // Seek until data section
+      // Set dataSize
+      byteCount = 0;
     }
-    virtual size_t available(void)
+    size_t available(void)
     {
 
     }
-    virtual size_t read(uint8_t *buffer, size_t numBytes)
+    size_t read(uint8_t *buffer, size_t numBytes)
     {
 
     }
-    virtual void close(void)
+    void close(void)
     {
 
     }
@@ -58,22 +65,21 @@ class MemSound : public Sound
     {
       dataPtr = sound;
       dataSize = soundSize;
-      byteCount = 0;
       sampleRate = sr;
     }
     ~MemSound()
     {
       // No need to free dataPtr since it is const
     }
-    virtual bool open(void)
+    void open(void)
     {
-      return true;
+      byteCount = 0;
     }
-    virtual size_t available(void)
+    size_t available(void)
     {
       return(dataSize - byteCount);
     }
-    virtual size_t read(uint8_t *buffer, size_t numBytes)
+    size_t read(uint8_t *buffer, size_t numBytes)
     {
       size_t bytesToRead;
       if(available() < numBytes)
@@ -84,8 +90,8 @@ class MemSound : public Sound
       byteCount += bytesToRead;
       return bytesToRead;
     }
-    virtual void close(void)
+    void close(void)
     {
-      byteCount = 0;
+      return;
     }
 };
