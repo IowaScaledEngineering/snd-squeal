@@ -3,6 +3,7 @@
 #include <I2S.h>
 #include <Preferences.h>
 #include <vector>
+#include <strings.h>
 
 #include "sound.h"
 #include "squeal/squeal.h"
@@ -213,6 +214,8 @@ void setup()
   Serial.print('.');
   delay(1000);
   Serial.print('.');
+  delay(1000);
+  Serial.println('.');
 
   // FIXME: read volume from NVM
   preferences.begin("squeal", false);
@@ -238,8 +241,8 @@ void play(Sound *wavSound)
 
   if(!I2S.begin(I2S_PHILIPS_MODE, wavSound->getSampleRate(), 16))
   {
-      Serial.println("Failed to initialize I2S!");
-      return;  // Fail and try the next one
+    Serial.println("Failed to initialize I2S!");
+    return;  // Fail and try the next one
   }
   digitalWrite(I2S_SD, 1);  // Enable amplifier
 
@@ -257,49 +260,139 @@ void play(Sound *wavSound)
       I2S.write(sampleValue);
     }
   }
-  wavSound->close();
   I2S.flush();
+  delay(1000 * AUDIO_BUFFER_SIZE / wavSound->getSampleRate());  // Let buffer finish
   digitalWrite(I2S_SD, 0);  // Disable amplifier
-  // FIXME: why is this delay needed?  The amplifier should shut off quickly after I2S_SD falls
-  delay(100);  // 50ms = click/pop, 75ms = no click/pop
   I2S.end();
+  wavSound->close();
 }
 
 void loop()
 {
+  bool usingSdSounds = false;
+  bool invalidSdSounds = false;
+  size_t fileNameLength;
+  File rootDir;
+  File wavFile;
+  const char *fileName;
+  uint16_t channels = 0;
+  uint32_t sampleRate = 0;
+  uint32_t wavDataSize = 0;
+  uint8_t i;
+
   std::vector<Sound *> squealSounds;
 
-  if(!SD.begin()) {
-    Serial.println("SD card initialization failed, using built-in sounds");
-    squealSounds.push_back(new MemSound(getSqueal(1), getSquealSize(1), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(2), getSquealSize(2), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(3), getSquealSize(3), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(4), getSquealSize(4), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(5), getSquealSize(5), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(6), getSquealSize(6), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(7), getSquealSize(7), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(8), getSquealSize(8), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(9), getSquealSize(9), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(10), getSquealSize(10), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(11), getSquealSize(11), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(12), getSquealSize(12), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(13), getSquealSize(13), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(14), getSquealSize(14), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(15), getSquealSize(15), 16000));
-    squealSounds.push_back(new MemSound(getSqueal(16), getSquealSize(16), 16000));
-    // Double blink blue
-    digitalWrite(LEDA, 1);
-    delay(250);
-    digitalWrite(LEDA, 0);
-    delay(250);
-    digitalWrite(LEDA, 1);
-    delay(250);
-    digitalWrite(LEDA, 0);
-    delay(250);
+  if(SD.begin())
+  {
+    rootDir = SD.open("/");
+    while(true)
+    {
+      wavFile = rootDir.openNextFile();
+
+      if (!wavFile)
+      {
+        break;  // No more files
+      }
+      if(wavFile.isDirectory())
+      {
+        Serial.print("  Skipping directory ");
+        Serial.println(wavFile.name());
+      }
+      else
+      {
+        fileName = wavFile.name();
+        fileNameLength = strlen(fileName);
+        if(fileNameLength < 5)
+          continue;  // Filename too short (x.wav = min 5 chars)
+        const char *extension = &fileName[strlen(fileName)-4];
+        if(strcasecmp(extension, ".wav"))
+        {
+          Serial.print("  Ignoring: ");
+          Serial.println(fileName);
+          continue;  // Not a wav file (by extension anyway)
+        }
+        
+        if(!wavFile.find("fmt "))  // Includes trailing space
+        {
+          Serial.print("! No fmt section: ");
+          Serial.println(fileName);
+          continue;
+        }
+
+        wavFile.seek(wavFile.position() + 6);  // Seek to number of channels
+        wavFile.read((uint8_t*)&channels, 2);  // Read channels - WAV is little endian, only works if uC is also little endian
+
+        if(channels > 1)
+        {
+          Serial.print("! Not mono: ");
+          Serial.println(fileName);
+          continue;
+        }
+
+        wavFile.read((uint8_t*)&sampleRate, 4);  // Read sample rate - WAV is little endian, only works if uC is also little endian
+
+        if((8000 != sampleRate) && (16000 != sampleRate) && (32000 != sampleRate) && (44100 != sampleRate))
+        {
+          Serial.print("! Incorrect sample rate: ");
+          Serial.println(fileName);
+          continue;
+        }
+
+        if(!wavFile.find("data"))
+        {
+          Serial.print("! No data section: ");
+          Serial.println(fileName);
+          continue;
+        }
+
+        // If we got here, then it looks like a valid wav file
+        // Get data length and offset
+
+        wavFile.read((uint8_t*)&wavDataSize, 4);  // Read data size - WAV is little endian, only works if uC is also little endian
+        // Offset is now the current position
+
+        Serial.print("+ Adding ");
+        Serial.print(fileName);
+        Serial.print(" (");
+        Serial.print(sampleRate);
+        Serial.print(",");
+        Serial.print(wavDataSize);
+        Serial.print(",");
+        Serial.print(wavFile.position());
+        Serial.println(")");
+
+        squealSounds.push_back(new SdSound(fileName, wavDataSize, wavFile.position(), sampleRate));
+
+        usingSdSounds = true;
+      }
+      wavFile.close();
+    }
+    rootDir.close();
+  }
+
+  Serial.println("");
+
+  if(usingSdSounds)
+  {
+    Serial.print("Using SD card sounds (");
+    Serial.print(squealSounds.size());
+    Serial.println(")");
+    // Quadruple blink blue
+    digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
   }
   else
   {
-    // Find files
+    Serial.println("Using built-in sounds");
+    for(i=1; i<=16; i++)
+    {
+      squealSounds.push_back(new MemSound(getSqueal(i), getSquealSize(i), 16000));
+    }
+    // Double blink blue
+    digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
   }
 
   Serial.print("Initial Volume: ");

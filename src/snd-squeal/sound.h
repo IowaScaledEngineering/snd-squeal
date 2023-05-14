@@ -7,7 +7,10 @@ class Sound
 
   public:
     virtual void open(void);
-    virtual size_t available(void);
+    virtual size_t available(void)
+    {
+      return(dataSize - byteCount);
+    }
     virtual size_t read(uint8_t *buffer, size_t numBytes);
     virtual void close(void);
     uint16_t getSampleRate(void)
@@ -19,13 +22,14 @@ class Sound
 class SdSound : public Sound
 {
   char *fileName;
-  size_t fileOffset;
+  size_t dataOffset;
+  File wavFile;
 
   public:
-    SdSound(char *fname, size_t numBytes, size_t offset, uint16_t sr)
+    SdSound(const char *fname, size_t numBytes, size_t offset, uint16_t sr)
     {
       fileName = strdup(fname);
-      fileOffset = offset;
+      dataOffset = offset;
       dataSize = numBytes;
       sampleRate = sr;
     }
@@ -35,24 +39,27 @@ class SdSound : public Sound
     }
     void open(void)
     {
+      wavFile = SD.open(String("/") + fileName);
+      wavFile.seek(dataOffset);
+      Serial.print("  ");
       Serial.println(fileName);
-      // Seek to fmt marker
-      // Validate format
-      // Seek until data section
-      // Set dataSize
       byteCount = 0;
-    }
-    size_t available(void)
-    {
-
     }
     size_t read(uint8_t *buffer, size_t numBytes)
     {
+      size_t bytesToRead, bytesRead;
+      if(available() < numBytes)
+        bytesToRead = available();
+      else
+        bytesToRead = numBytes;
 
+      bytesRead = wavFile.read(buffer, bytesToRead);
+      byteCount += bytesRead;
+      return bytesRead;
     }
     void close(void)
     {
-
+      wavFile.close();
     }
 };
 
@@ -74,10 +81,6 @@ class MemSound : public Sound
     void open(void)
     {
       byteCount = 0;
-    }
-    size_t available(void)
-    {
-      return(dataSize - byteCount);
     }
     size_t read(uint8_t *buffer, size_t numBytes)
     {
