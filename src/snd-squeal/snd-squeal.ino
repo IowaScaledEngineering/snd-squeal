@@ -270,7 +270,6 @@ void play(Sound *wavSound)
 void loop()
 {
   bool usingSdSounds = false;
-  bool invalidSdSounds = false;
   size_t fileNameLength;
   File rootDir;
   File wavFile;

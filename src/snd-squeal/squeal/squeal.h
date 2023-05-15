@@ -42,7 +42,7 @@ const uint8_t * getSqueal(uint8_t num)
     }
 }
 
-const size_t getSquealSize(uint8_t num)
+size_t getSquealSize(uint8_t num)
 {
     switch(num)
     {
@@ -63,6 +63,6 @@ const size_t getSquealSize(uint8_t num)
         case 15: return flange15_wav_len;
         case 16: return flange16_wav_len;
         default:
-            return NULL;
+            return 0;
     }
 }

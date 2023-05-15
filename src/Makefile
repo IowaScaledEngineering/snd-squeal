@@ -17,11 +17,16 @@ help:
 	@echo "make upload..... Flash the firmware"
 	@echo "make terminal... Open uart terminal"
 
+# https://arduino.github.io/arduino-cli/0.32/commands/arduino-cli_compile/
+
 compile:
-	$(ARDUINO) compile -v -b $(BOARD) $(BASE_NAME)
+	$(ARDUINO) compile -b $(BOARD) $(BASE_NAME) --warnings all
+
+compile-verbose:
+	$(ARDUINO) compile -v -b $(BOARD) $(BASE_NAME) --warnings all
 
 upload:
-	$(ARDUINO) upload -b $(BOARD) -p $(PORT) $(BASE_NAME)
+	$(ARDUINO) upload -b $(BOARD) $(BASE_NAME)
 
 terminal:
 	miniterm.py $(PORT) 115200
