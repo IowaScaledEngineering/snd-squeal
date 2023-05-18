@@ -44,7 +44,7 @@
 #define SDCS      34
 #define SDDET     33
 
-uint8_t desiredVolume = 0;        // 0 to 15
+uint8_t volumeStep = 0;        // 0 to 15
 uint16_t volume = 0;              // 0 to 15000
 uint8_t enable = 0;               // 0 or 1
 
@@ -86,7 +86,7 @@ void IRAM_ATTR processVolume(void)
   digitalWrite(AUX5, 1);
 
   // Turn off LED
-  uint16_t ledHoldTime = (VOL_NOM == desiredVolume) ? 1000 : 100;
+  uint16_t ledHoldTime = (VOL_NOM == volumeStep) ? 1000 : 100;
   if((millis() - pressTime) > ledHoldTime)
   {
     digitalWrite(LEDB, 0);
@@ -130,13 +130,13 @@ void IRAM_ATTR processVolume(void)
   if((buttonsPressed ^ oldButtonsPressed) & (buttonsPressed & VOL_UP_BUTTON))
   {
     pressTime = millis();
-    if(desiredVolume < VOL_MAX)
+    if(volumeStep < VOL_MAX)
     {
-      desiredVolume++;
-      preferences.putUChar("volume", desiredVolume);
+      volumeStep++;
+      preferences.putUChar("volume", volumeStep);
     }
     Serial.print("Vol Up: ");
-    Serial.println(desiredVolume);
+    Serial.println(volumeStep);
     digitalWrite(LEDB, 1);
   }
 
@@ -144,13 +144,13 @@ void IRAM_ATTR processVolume(void)
   if((buttonsPressed ^ oldButtonsPressed) & (buttonsPressed & VOL_DN_BUTTON))
   {
     pressTime = millis();
-    if(desiredVolume > 0)
+    if(volumeStep > 0)
     {
-      desiredVolume--;
-      preferences.putUChar("volume", desiredVolume);
+      volumeStep--;
+      preferences.putUChar("volume", volumeStep);
     }
     Serial.print("Vol Dn: ");
-    Serial.println(desiredVolume);
+    Serial.println(volumeStep);
     digitalWrite(LEDB, 1);
   }
 
@@ -167,7 +167,21 @@ void IRAM_ATTR processVolume(void)
 
   // Process volume
   uint16_t deltaVolume;
-  uint16_t volumeTarget = 1000 * desiredVolume * enable;
+  uint16_t volumeTarget;
+  if(0 == volumeStep)
+  {
+    volumeTarget = 0;
+  }
+  else if((1 <= volumeStep) && (volumeStep <= 10))
+  {
+    //  Logarithmic attenuation volume (20 to 10240)
+    volumeTarget = 10 * (1 << volumeStep) * enable;
+  }
+  else
+  {
+    //  Linear amplification volume (11264 to 15360)
+    volumeTarget = volumeStep * 1024 * enable;
+  }
 
   if(volume < volumeTarget)
   {
@@ -175,7 +189,7 @@ void IRAM_ATTR processVolume(void)
     if((deltaVolume > 0) && (deltaVolume < VOL_UP_COEF))
       deltaVolume = VOL_UP_COEF;  // Make sure it goes all the way to min or max
     volume += deltaVolume  / VOL_UP_COEF;
-//    Serial.println(volume);
+    Serial.println(volume);
   }
   else if(volume > volumeTarget)
   {
@@ -183,7 +197,7 @@ void IRAM_ATTR processVolume(void)
     if((deltaVolume > 0) && (deltaVolume < VOL_DN_COEF))
       deltaVolume = VOL_DN_COEF;  // Make sure it goes all the way to min or max
     volume -= deltaVolume / VOL_DN_COEF;
-//    Serial.println(volume);
+    Serial.println(volume);
   }
 
   oldButtonsPressed = buttonsPressed;
@@ -225,7 +239,7 @@ void setup()
 
   // FIXME: read volume from NVM
   preferences.begin("squeal", false);
-  desiredVolume = preferences.getUChar("volume", 10);
+  volumeStep = preferences.getUChar("volume", 10);
 
   timer = timerBegin(0, 80, true);  // Timer 0, 80x prescaler = 1us
   timerAttachInterrupt(timer, &processVolume, false);  // level triggered
@@ -264,7 +278,7 @@ void play(Sound *wavSound)
 //      digitalWrite(AUX3, 1);  // Note: causes some audio interference - crosstalk?
       // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
       sampleValue = *((int16_t *)(fileBuffer+i));
-      sampleValue = sampleValue * volume / (1000 * VOL_NOM);
+      sampleValue = sampleValue * volume / (1024 * VOL_NOM);
       // Write twice (left & right)
       I2S.write(sampleValue);
       I2S.write(sampleValue);
@@ -407,7 +421,7 @@ void loop()
   }
 
   Serial.print("Initial Volume: ");
-  Serial.println(desiredVolume);
+  Serial.println(volumeStep);
   timerAlarmEnable(timer);
 
   while(1)
