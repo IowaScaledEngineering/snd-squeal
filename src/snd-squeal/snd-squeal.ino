@@ -255,22 +255,22 @@ void play(Sound *wavSound)
   while(wavSound->available())
   {
     // Audio buffer samples are in 16-bit chunks, so multiply by two to get # of bytes to read
-    digitalWrite(AUX1, 1);
+//    digitalWrite(AUX1, 1);
     bytesRead = wavSound->read(fileBuffer, (size_t)FILE_BUFFER_SIZE);
-    digitalWrite(AUX1, 0);
-    digitalWrite(AUX2, 1);
+//    digitalWrite(AUX1, 0);
+//    digitalWrite(AUX2, 1);
     for(i=0; i<bytesRead; i+=2)
     {
-      digitalWrite(AUX3, 1);
+//      digitalWrite(AUX3, 1);  // Note: causes some audio interference - crosstalk?
       // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
       sampleValue = *((int16_t *)(fileBuffer+i));
       sampleValue = sampleValue * volume / (1000 * VOL_NOM);
       // Write twice (left & right)
       I2S.write(sampleValue);
       I2S.write(sampleValue);
-      digitalWrite(AUX3, 0);
+//      digitalWrite(AUX3, 0);
     }
-    digitalWrite(AUX2, 0);
+//    digitalWrite(AUX2, 0);
   }
   I2S.flush();
   delay(2 * 1000 * AUDIO_BUFFER_SIZE / wavSound->getSampleRate());  // Let buffer finish, length of 2 audio buffers in millisecs
