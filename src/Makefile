@@ -7,10 +7,14 @@
 #*************************************************************************
 
 BASE_NAME = snd-squeal
-BOARD     = esp32:esp32:esp32s2:CDCOnBoot=cdc,UploadMode=cdc,PSRAM=enabled,PartitionScheme=huge_app
+#BOARD     = esp32:esp32:esp32s2:CDCOnBoot=cdc,UploadMode=cdc,PSRAM=enabled,PartitionScheme=huge_app
+BOARD     = esp32:esp32:esp32s2:CDCOnBoot=cdc,UploadMode=cdc,PSRAM=enabled
+OPTIONS   = --build-path ./build --build-property upload.maximum_size=4063232
 PORT      = /dev/ttyACM0
 
 ARDUINO   = arduino-cli
+
+COMPILE   = $(ARDUINO) compile -b $(BOARD) $(OPTIONS) $(BASE_NAME) --warnings all
 
 help:
 	@echo "make compile.... Build $(BASE_NAME)"
@@ -20,13 +24,16 @@ help:
 # https://arduino.github.io/arduino-cli/0.32/commands/arduino-cli_compile/
 
 compile:
-	$(ARDUINO) compile -b $(BOARD) $(BASE_NAME) --warnings all
+	$(COMPILE)
 
 compile-verbose:
-	$(ARDUINO) compile -v -b $(BOARD) $(BASE_NAME) --warnings all
+	$(COMPILE) -v
 
 upload:
-	$(ARDUINO) upload -v -b $(BOARD) -p $(PORT) $(BASE_NAME)
+	$(ARDUINO) upload -v -p $(PORT) $(BASE_NAME)
 
 terminal:
 	miniterm.py $(PORT) 115200
+
+clean:
+	rm -r ./build
