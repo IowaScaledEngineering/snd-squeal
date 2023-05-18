@@ -189,7 +189,7 @@ void IRAM_ATTR processVolume(void)
     if((deltaVolume > 0) && (deltaVolume < VOL_UP_COEF))
       deltaVolume = VOL_UP_COEF;  // Make sure it goes all the way to min or max
     volume += deltaVolume  / VOL_UP_COEF;
-    Serial.println(volume);
+//    Serial.println(volume);
   }
   else if(volume > volumeTarget)
   {
@@ -197,7 +197,7 @@ void IRAM_ATTR processVolume(void)
     if((deltaVolume > 0) && (deltaVolume < VOL_DN_COEF))
       deltaVolume = VOL_DN_COEF;  // Make sure it goes all the way to min or max
     volume -= deltaVolume / VOL_DN_COEF;
-    Serial.println(volume);
+//    Serial.println(volume);
   }
 
   oldButtonsPressed = buttonsPressed;
