@@ -68,10 +68,10 @@ class MemSound : public Sound
   const uint8_t *dataPtr;
 
   public:
-    MemSound(const uint8_t *sound, size_t soundSize, uint16_t sr)
+    MemSound(const uint8_t *sound, size_t numBytes, uint16_t sr)
     {
       dataPtr = sound;
-      dataSize = soundSize;
+      dataSize = numBytes;
       sampleRate = sr;
     }
     ~MemSound()
