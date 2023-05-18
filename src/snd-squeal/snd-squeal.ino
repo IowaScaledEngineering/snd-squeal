@@ -10,8 +10,9 @@
 
 // Samples
 #define AUDIO_BUFFER_SIZE 1024
-// Bytes
-#define FILE_BUFFER_SIZE AUDIO_BUFFER_SIZE * 2
+
+// Bytes - needs to be 2x audio buffer since audio buffer is 16-bit samples
+#define FILE_BUFFER_SIZE (AUDIO_BUFFER_SIZE * 2)
 
 // Volume
 #define VOL_MAX       15
@@ -42,7 +43,6 @@
 #define SDMISO    37
 #define SDCS      34
 #define SDDET     33
-#define TEST1     15
 
 uint8_t desiredVolume = 0;        // 0 to 15
 uint16_t volume = 0;              // 0 to 15000
@@ -83,7 +83,7 @@ void IRAM_ATTR processVolume(void)
   static unsigned long pressTime = 0;
   uint8_t inputStatus = 0;
 
-  digitalWrite(TEST1, 1);
+  digitalWrite(AUX5, 1);
 
   // Turn off LED
   uint16_t ledHoldTime = (VOL_NOM == desiredVolume) ? 1000 : 100;
@@ -187,7 +187,7 @@ void IRAM_ATTR processVolume(void)
   }
 
   oldButtonsPressed = buttonsPressed;
-  digitalWrite(TEST1, 0);
+  digitalWrite(AUX5, 0);
 }
 
 void setup()
@@ -209,6 +209,12 @@ void setup()
   pinMode(EN2, INPUT_PULLUP);
   pinMode(EN3, INPUT_PULLUP);
   pinMode(EN4, INPUT_PULLUP);
+
+  pinMode(AUX1, OUTPUT);
+  pinMode(AUX2, OUTPUT);
+  pinMode(AUX3, OUTPUT);
+  pinMode(AUX4, OUTPUT);
+  pinMode(AUX5, OUTPUT);
 
   delay(1000);
   Serial.print('.');
@@ -249,19 +255,25 @@ void play(Sound *wavSound)
   while(wavSound->available())
   {
     // Audio buffer samples are in 16-bit chunks, so multiply by two to get # of bytes to read
+    digitalWrite(AUX1, 1);
     bytesRead = wavSound->read(fileBuffer, (size_t)FILE_BUFFER_SIZE);
+    digitalWrite(AUX1, 0);
+    digitalWrite(AUX2, 1);
     for(i=0; i<bytesRead; i+=2)
     {
+      digitalWrite(AUX3, 1);
       // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
       sampleValue = *((int16_t *)(fileBuffer+i));
       sampleValue = sampleValue * volume / (1000 * VOL_NOM);
       // Write twice (left & right)
       I2S.write(sampleValue);
       I2S.write(sampleValue);
+      digitalWrite(AUX3, 0);
     }
+    digitalWrite(AUX2, 0);
   }
   I2S.flush();
-  delay(1000 * AUDIO_BUFFER_SIZE / wavSound->getSampleRate());  // Let buffer finish
+  delay(2 * 1000 * AUDIO_BUFFER_SIZE / wavSound->getSampleRate());  // Let buffer finish, length of 2 audio buffers in millisecs
   digitalWrite(I2S_SD, 0);  // Disable amplifier
   I2S.end();
   wavSound->close();
