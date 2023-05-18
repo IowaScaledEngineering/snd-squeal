@@ -26,7 +26,7 @@ compile-verbose:
 	$(ARDUINO) compile -v -b $(BOARD) $(BASE_NAME) --warnings all
 
 upload:
-	$(ARDUINO) upload -b $(BOARD) $(BASE_NAME)
+	$(ARDUINO) upload -v -b $(BOARD) -p $(PORT) $(BASE_NAME)
 
 terminal:
 	miniterm.py $(PORT) 115200
