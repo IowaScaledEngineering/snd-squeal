@@ -1,0 +1,5 @@
+./convert16k
+python3 combiner.py
+./createMixHeader
+
+Move flangeMix.h to src/snd-squeal/squeal/

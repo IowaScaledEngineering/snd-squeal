@@ -411,7 +411,7 @@ void loop()
   else
   {
     Serial.println("Using built-in sounds");
-    for(i=1; i<=16; i++)
+    for(i=1; i<=NUM_FLANGE_SOUNDS; i++)
     {
       squealSounds.push_back(new MemSound(getSqueal(i), getSquealSize(i), 16000));
     }
