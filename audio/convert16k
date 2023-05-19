@@ -1,0 +1,14 @@
+#!/bin/bash
+
+i=1
+
+for f in $(ls -v original-audio/*.wav)
+do
+	echo; echo; echo
+	echo $f
+	echo
+	newFname=$(printf "flange%02d" $i)
+	ffmpeg -i $f -ac 1 -ar 16000 $newFname.wav
+
+	i=$((i+1))
+done

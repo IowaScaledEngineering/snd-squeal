@@ -1,0 +1,6 @@
+#!/bin/bash
+
+fname=flangeMix
+xxd -i -s +$(python3 findDataSection.py $fname.wav) $fname.wav > $fname.h.tmp
+cat $fname.h.tmp | sed "s/unsigned/const unsigned/" > $fname.h
+rm $fname.h.tmp
