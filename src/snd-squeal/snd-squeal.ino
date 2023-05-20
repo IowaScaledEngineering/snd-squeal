@@ -302,6 +302,7 @@ void loop()
   const char *fileName;
   uint16_t channels = 0;
   uint32_t sampleRate = 0;
+  uint16_t bitsPerSample = 0;
   uint32_t wavDataSize = 0;
   uint8_t i;
 
@@ -359,6 +360,16 @@ void loop()
         if((8000 != sampleRate) && (16000 != sampleRate) && (32000 != sampleRate) && (44100 != sampleRate))
         {
           Serial.print("! Incorrect sample rate: ");
+          Serial.println(fileName);
+          continue;
+        }
+
+        wavFile.seek(wavFile.position() + 6);  // Seek to bits per sample
+        wavFile.read((uint8_t*)&bitsPerSample, 2);  // Read bits per sample - WAV is little endian, only works if uC is also little endian
+
+        if(16 != bitsPerSample)
+        {
+          Serial.print("! Not 16-bit: ");
           Serial.println(fileName);
           continue;
         }
