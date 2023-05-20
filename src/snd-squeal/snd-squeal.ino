@@ -180,7 +180,7 @@ void IRAM_ATTR processVolume(void)
   else
   {
     //  Linear amplification volume (11264 to 15360)
-    volumeTarget = volumeStep * 1024 * enable;
+    volumeTarget = (10 + 2*(volumeStep-10)) * 1024 * enable;
   }
 
   if(volume < volumeTarget)
