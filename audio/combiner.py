@@ -21,11 +21,14 @@ def readWav(logName):
     numSamples = 0
     state = 0
     arrayOfBytes = bytearray()
-    silenceDivider = 4   # Initial silence is shorter, but still random
-    while numSamples < (numSeconds * 16000):
+    silenceDivider = 2   # Initial silence is shorter, but still random
+    targetSamples = numSeconds * 16000
+    while numSamples < targetSamples:
         if(0 == state):
             # Insert silence
             silenceSamples = random.randrange(int(16000*minSilence/silenceDivider), int(16000*maxSilence/silenceDivider))
+            if (numSamples + silenceSamples) > targetSamples:
+                break  # Don't add silence if it would put us over the target length - prevent extended silence at the end
             t.write(str(silenceSamples) + " (" + str(silenceSamples/16000) + ")\n")
             arrayOfBytes.extend(bytearray(2*silenceSamples))
             numSamples = numSamples + silenceSamples
