@@ -421,11 +421,18 @@ void loop()
   }
   else
   {
-    Serial.println("Using built-in sounds");
-    for(i=1; i<=NUM_FLANGE_SOUNDS; i++)
+    i = 0;
+    do
     {
-      squealSounds.push_back(new MemSound(getSqueal(i), getSquealSize(i), 16000));
-    }
+      if((NULL != getSqueal(i)) && (0 != getSquealSize(i)))
+      {
+        squealSounds.push_back(new MemSound(getSqueal(i), getSquealSize(i), 16000));
+      }
+      i++;
+    } while (i);
+    Serial.print("Using built-in sounds (");
+    Serial.print(squealSounds.size());
+    Serial.println(")");
     // Double blink blue
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
@@ -444,5 +451,17 @@ void loop()
     Serial.print("Playing... ");
     Serial.println(sampleNum);
     play(squealSounds[sampleNum]);
+    if(!usingSdSounds)
+    {
+      // Add some silence
+      uint8_t silenceDecisecs = random(0, 30);
+      Serial.print("Silence... ");
+      Serial.print(silenceDecisecs/10.0, 1);
+      Serial.println("s");
+      for(i=0; i<silenceDecisecs; i++)
+      {
+        delay(100);
+      }
+    }
   }
 }
