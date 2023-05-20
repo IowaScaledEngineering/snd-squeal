@@ -30,7 +30,7 @@ compile-verbose:
 	$(COMPILE) -v
 
 upload:
-	$(ARDUINO) upload -v --input-dir ./build  -p $(PORT) $(BASE_NAME)
+	$(ARDUINO) upload -v --input-dir ./build  -b $(BOARD) -p $(PORT) $(BASE_NAME)
 
 terminal:
 	miniterm.py $(PORT) 115200
