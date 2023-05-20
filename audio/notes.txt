@@ -1,5 +1,10 @@
 ./convert16k
 python3 combiner.py
 ./createMixHeader
-
 Move flangeMix.h to src/snd-squeal/squeal/
+
+./convert16k
+python3 combiner.py
+Manually split into chunks
+./createHeaders
+Move *.h to src/snd-squeal/squeal

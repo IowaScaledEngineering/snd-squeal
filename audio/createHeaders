@@ -1,0 +1,12 @@
+#!/bin/bash
+
+for fname in $(ls clips/*.wav)
+do
+    f=$(echo $(basename $fname) | sed "s/.wav//")
+    echo $f
+    cd clips
+    xxd -i -s +$(python3 ../findDataSection.py $f.wav) $f.wav > ../$f.h.tmp
+    cd ..
+    cat $f.h.tmp | sed "s/unsigned/const unsigned/" > $f.h
+    rm $f.h.tmp
+done

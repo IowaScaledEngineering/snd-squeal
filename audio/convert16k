@@ -2,13 +2,15 @@
 
 i=1
 
+mkdir -p 16kmono
+
 for f in $(ls -v original-audio/*.wav)
 do
 	echo; echo; echo
 	echo $f
 	echo
 	newFname=$(printf "flange%02d" $i)
-	ffmpeg -i $f -ac 1 -ar 16000 $newFname.wav
+	ffmpeg -i $f -ac 1 -ar 16000 16kmono/$newFname.wav
 
 	i=$((i+1))
 done

@@ -5,11 +5,12 @@ import struct
 import sys
 
 numTracks  = 4
-numSeconds = 100
+numSeconds = 200
 minSilence = 0.1
 maxSilence = 10.0
+gainFactor = 0.75  # Provide some attenutation to prevent clipping
 
-wavfiles = glob.glob('flange[0-9][0-9].wav')
+wavfiles = glob.glob('16kmono/flange[0-9][0-9].wav')
 
 outfile = "flangeMix.wav"
 data1 = []
@@ -94,7 +95,7 @@ for i in range(newLength):
         sys.stdout.flush()
     value = 0
     for j in range(len(wavData)):
-        value = value + round(wavData[j][i]*0.9)  # Provide some attenutation to prevent clipping
+        value = value + round(wavData[j][i]*gainFactor)
         outputSingle[j].writeframes(struct.pack('<h', wavData[j][i]))
     data = struct.pack('<h', value)
     output.writeframes(data)
