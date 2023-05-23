@@ -7,14 +7,19 @@
 #*************************************************************************
 
 BASE_NAME = snd-squeal
+
+GITREV := $(shell git rev-parse --short=6 HEAD)
+REV    := $(shell ./git-revision.sh)
+
 #BOARD     = esp32:esp32:esp32s2:CDCOnBoot=cdc,UploadMode=cdc,PSRAM=enabled,PartitionScheme=huge_app
 BOARD     = esp32:esp32:esp32s2:CDCOnBoot=cdc,UploadMode=cdc,PSRAM=enabled
-OPTIONS   = --build-property upload.maximum_size=4063232
+OPTIONS   = --build-property upload.maximum_size=4063232 --build-property compiler.cpp.extra_flags='-DGIT_REV=0x$(GITREV)L -DVERSION_STRING="$(REV)"'
 PORT      = /dev/ttyACM0
 
 ARDUINO   = arduino-cli
+BUILD_DIR = ./build
 
-COMPILE   = $(ARDUINO) compile -b $(BOARD) --build-path ./build $(OPTIONS) $(BASE_NAME) --warnings all
+COMPILE   = $(ARDUINO) compile -b $(BOARD) --build-path $(BUILD_DIR) $(OPTIONS) $(BASE_NAME) --warnings all
 
 help:
 	@echo "make compile.... Build $(BASE_NAME)"
@@ -30,10 +35,11 @@ compile-verbose:
 	$(COMPILE) -v
 
 upload:
-	$(ARDUINO) upload -v --input-dir ./build  -b $(BOARD) -p $(PORT) $(BASE_NAME)
+	# Need to provide board option to reliably upload
+	$(ARDUINO) upload -v --input-dir $(BUILD_DIR)  -b $(BOARD) -p $(PORT) $(BASE_NAME)
 
 terminal:
 	miniterm.py $(PORT) 115200
 
 clean:
-	rm -r ./build
+	rm -r $(BUILD_DIR)

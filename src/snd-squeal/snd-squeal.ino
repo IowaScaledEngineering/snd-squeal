@@ -6,7 +6,25 @@
 #include <strings.h>
 
 #include "sound.h"
-#include "squeal/squeal.h"
+
+#include "squeal/flangeClip01.h"
+#include "squeal/flangeClip02.h"
+#include "squeal/flangeClip03.h"
+#include "squeal/flangeClip04.h"
+#include "squeal/flangeClip05.h"
+#include "squeal/flangeClip06.h"
+#include "squeal/flangeClip07.h"
+#include "squeal/flangeClip08.h"
+#include "squeal/flangeClip09.h"
+#include "squeal/flangeClip10.h"
+//#include "squeal/flangeClip11.h"
+#include "squeal/flangeClip12.h"
+#include "squeal/flangeClip13.h"
+#include "squeal/flangeClip14.h"
+#include "squeal/flangeClip15.h"
+//#include "squeal/flangeClip16.h"
+//#include "squeal/flangeClip17.h"
+//#include "squeal/flangeClip18.h"
 
 // Samples
 #define AUDIO_BUFFER_SIZE 1024
@@ -237,9 +255,16 @@ void setup()
   delay(1000);
   Serial.println('.');
 
-  // FIXME: read volume from NVM
+  Serial.print("Version: ");
+  Serial.println(VERSION_STRING);
+
+  Serial.print("Git Rev: ");
+  Serial.println(GIT_REV, HEX);
+
   preferences.begin("squeal", false);
   volumeStep = preferences.getUChar("volume", 10);
+  Serial.print("Initial Volume: ");
+  Serial.println(volumeStep);
 
   timer = timerBegin(0, 80, true);  // Timer 0, 80x prescaler = 1us
   timerAttachInterrupt(timer, &processVolume, false);  // level triggered
@@ -398,7 +423,6 @@ void loop()
         Serial.println(")");
 
         squealSounds.push_back(new SdSound(fileName, wavDataSize, wavFile.position(), sampleRate));
-
         usingSdSounds = true;
       }
       wavFile.close();
@@ -421,15 +445,24 @@ void loop()
   }
   else
   {
-    i = 0;
-    do
-    {
-      if((NULL != getSqueal(i)) && (0 != getSquealSize(i)))
-      {
-        squealSounds.push_back(new MemSound(getSqueal(i), getSquealSize(i), 16000));
-      }
-      i++;
-    } while (i);
+    squealSounds.push_back(new MemSound(1, flangeClip01_wav, flangeClip01_wav_len, 16000));
+    squealSounds.push_back(new MemSound(2, flangeClip02_wav, flangeClip02_wav_len, 16000));
+    squealSounds.push_back(new MemSound(3, flangeClip03_wav, flangeClip03_wav_len, 16000));
+    squealSounds.push_back(new MemSound(4, flangeClip04_wav, flangeClip04_wav_len, 16000));
+    squealSounds.push_back(new MemSound(5, flangeClip05_wav, flangeClip05_wav_len, 16000));
+    squealSounds.push_back(new MemSound(6, flangeClip06_wav, flangeClip06_wav_len, 16000));
+    squealSounds.push_back(new MemSound(7, flangeClip07_wav, flangeClip07_wav_len, 16000));
+    squealSounds.push_back(new MemSound(8, flangeClip08_wav, flangeClip08_wav_len, 16000));
+    squealSounds.push_back(new MemSound(9, flangeClip09_wav, flangeClip09_wav_len, 16000));
+    squealSounds.push_back(new MemSound(10, flangeClip10_wav, flangeClip10_wav_len, 16000));
+//    squealSounds.push_back(new MemSound(11, flangeClip11_wav, flangeClip11_wav_len, 16000));
+    squealSounds.push_back(new MemSound(12, flangeClip12_wav, flangeClip12_wav_len, 16000));
+    squealSounds.push_back(new MemSound(13, flangeClip13_wav, flangeClip13_wav_len, 16000));
+    squealSounds.push_back(new MemSound(14, flangeClip14_wav, flangeClip14_wav_len, 16000));
+    squealSounds.push_back(new MemSound(15, flangeClip15_wav, flangeClip15_wav_len, 16000));
+//    squealSounds.push_back(new MemSound(16, flangeClip16_wav, flangeClip16_wav_len, 16000));
+//    squealSounds.push_back(new MemSound(17, flangeClip17_wav, flangeClip17_wav_len, 16000));
+//    squealSounds.push_back(new MemSound(18, flangeClip18_wav, flangeClip18_wav_len, 16000));
     Serial.print("Using built-in sounds (");
     Serial.print(squealSounds.size());
     Serial.println(")");
@@ -438,8 +471,6 @@ void loop()
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
   }
 
-  Serial.print("Initial Volume: ");
-  Serial.println(volumeStep);
   timerAlarmEnable(timer);
 
   while(1)
@@ -454,7 +485,7 @@ void loop()
     if(!usingSdSounds)
     {
       // Add some silence
-      uint8_t silenceDecisecs = random(0, 30);
+      uint8_t silenceDecisecs = random(0, 50);
       Serial.print("Silence... ");
       Serial.print(silenceDecisecs/10.0, 1);
       Serial.println("s");

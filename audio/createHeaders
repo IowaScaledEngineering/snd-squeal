@@ -8,5 +8,9 @@ do
     xxd -i -s +$(python3 ../findDataSection.py $f.wav) $f.wav > ../$f.h.tmp
     cd ..
     cat $f.h.tmp | sed "s/unsigned/const unsigned/" > $f.h
+    
+#    echo >> $f.h
+#    echo "squealSounds.push_back(new MemSound(${f}_wav, ${f}_wav_len, 16000));" >> $f.h
+
     rm $f.h.tmp
 done

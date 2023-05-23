@@ -66,10 +66,12 @@ class SdSound : public Sound
 class MemSound : public Sound
 {
   const uint8_t *dataPtr;
+  uint8_t soundNum;
 
   public:
-    MemSound(const uint8_t *sound, size_t numBytes, uint16_t sr)
+    MemSound(uint8_t num, const uint8_t *sound, size_t numBytes, uint16_t sr)
     {
+      soundNum = num;
       dataPtr = sound;
       dataSize = numBytes;
       sampleRate = sr;
@@ -80,6 +82,9 @@ class MemSound : public Sound
     }
     void open(void)
     {
+      Serial.print("  ");
+      Serial.print("Clip ");
+      Serial.println(soundNum);
       byteCount = 0;
     }
     size_t read(uint8_t *buffer, size_t numBytes)
