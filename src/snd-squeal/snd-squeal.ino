@@ -62,9 +62,10 @@
 #define SDCS      34
 #define SDDET     33
 
-uint8_t volumeStep = 0;        // 0 to 15
-uint16_t volume = 0;              // 0 to 15000
-uint8_t enable = 0;               // 0 or 1
+uint8_t volumeStep = 0;          // 0 to 15
+uint16_t volume = 0;             // 0 to 15000
+uint8_t enable = 0;              // 0 or 1
+uint8_t silenceDecisecsMax = 0;  // 0 to 15
 
 // Bit positions for inputs
 #define VOL_UP_BUTTON 0x01
@@ -172,6 +173,35 @@ void IRAM_ATTR processVolume(void)
     digitalWrite(LEDB, 1);
   }
 
+  // Check for serial input
+  if(Serial.available() > 0)
+  {
+    uint8_t serialChar = Serial.read();
+    switch(serialChar)
+    {
+      case 'a':
+        if(silenceDecisecsMax < 255)
+        {
+          silenceDecisecsMax++;
+          preferences.putUChar("silence", silenceDecisecsMax);
+        }
+        Serial.print("Silence Max: ");
+        Serial.print(silenceDecisecsMax/10.0, 1);
+        Serial.println("s");
+        break;
+      case 'z':
+        if(silenceDecisecsMax > 0)
+        {
+          silenceDecisecsMax--;
+          preferences.putUChar("silence", silenceDecisecsMax);
+        }
+        Serial.print("Silence Max: ");
+        Serial.print(silenceDecisecsMax/10.0, 1);
+        Serial.println("s");
+        break;
+    }
+  }
+
   enable = (buttonsPressed & (EN1_INPUT | EN2_INPUT | EN3_INPUT | EN4_INPUT)) ? 1 : 0;
 
   if(enable)
@@ -255,6 +285,14 @@ void setup()
   delay(1000);
   Serial.println('.');
 
+  Serial.println("     _____   ____   _    _  ______            _       ______  _____");
+  Serial.println("    / ____| / __ \\ | |  | ||  ____|    /\\    | |     |  ____||  __ \\");
+  Serial.println("   | (___  | |  | || |  | || |__      /  \\   | |     | |__   | |__) |");
+  Serial.println("    \\___ \\ | |  | || |  | ||  __|    / /\\ \\  | |     |  __|  |  _  /");
+  Serial.println("    ____) || |__| || |__| || |____  / ____ \\ | |____ | |____ | | \\ \\");
+  Serial.println("   |_____/  \\___\\_\\ \\____/ |______|/_/    \\_\\|______||______||_|  \\_\\");
+  Serial.println("\nM O T I O N   A C T I V A T E D   F L A N G E   S Q U E A L   S Y S T E M\n");
+
   Serial.print("Version: ");
   Serial.println(VERSION_STRING);
 
@@ -263,8 +301,13 @@ void setup()
 
   preferences.begin("squeal", false);
   volumeStep = preferences.getUChar("volume", 10);
-  Serial.print("Initial Volume: ");
+  Serial.print("Volume: ");
   Serial.println(volumeStep);
+
+  silenceDecisecsMax = preferences.getUChar("silence", 50);
+  Serial.print("Silence Max: ");
+  Serial.print(silenceDecisecsMax/10.0, 1);
+  Serial.println("s");
 
   timer = timerBegin(0, 80, true);  // Timer 0, 80x prescaler = 1us
   timerAttachInterrupt(timer, &processVolume, false);  // level triggered
@@ -485,14 +528,16 @@ void loop()
     if(!usingSdSounds)
     {
       // Add some silence
-      uint8_t silenceDecisecs = random(0, 50);
+      uint8_t silenceDecisecs = random(0, silenceDecisecsMax);
       Serial.print("Silence... ");
       Serial.print(silenceDecisecs/10.0, 1);
       Serial.println("s");
       for(i=0; i<silenceDecisecs; i++)
       {
+        Serial.print(".");
         delay(100);
       }
+      Serial.println("");
     }
   }
 }
