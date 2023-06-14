@@ -38,6 +38,10 @@ upload:
 	# Need to provide board option to reliably upload
 	$(ARDUINO) upload -v --input-dir $(BUILD_DIR)  -b $(BOARD) -p $(PORT) $(BASE_NAME)
 
+upload-bin:
+	# Need to provide board option to reliably upload
+	$(ARDUINO) upload -v --input-dir $(BIN)  -b $(BOARD) -p $(PORT) $(BASE_NAME)
+
 terminal:
 	miniterm.py $(PORT) 115200
 
