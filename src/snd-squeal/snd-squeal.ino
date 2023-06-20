@@ -33,12 +33,6 @@
 // Bytes
 #define FILE_BUFFER_SIZE 2048
 
-// Volume
-#define VOL_MAX       15
-#define VOL_NOM       10
-#define VOL_UP_COEF   10
-#define VOL_DN_COEF   8
-
 // Pins
 #define EN1       9
 #define EN2       10
@@ -63,11 +57,6 @@
 #define SDCS      34
 #define SDDET     33
 
-uint8_t volumeStep = 0;          // 0 to 15
-uint16_t volume = 0;             // 0 to 15000
-uint8_t enable = 0;              // 0 or 1
-uint8_t silenceDecisecsMax = 0;  // 0 to 15
-
 // Bit positions for inputs
 #define VOL_UP_BUTTON 0x01
 #define VOL_DN_BUTTON 0x02
@@ -75,6 +64,52 @@ uint8_t silenceDecisecsMax = 0;  // 0 to 15
 #define EN2_INPUT     0x20
 #define EN3_INPUT     0x40
 #define EN4_INPUT     0x80
+
+// Volume
+#define VOL_STEP_MAX  30
+#define VOL_STEP_NOM  20
+#define VOL_UP_COEF   10
+#define VOL_DN_COEF   8
+
+uint8_t volumeStep = 0;
+uint16_t volume = 0;
+
+uint16_t volumeLevels[] = {
+  0,      // 0
+  100,
+  200,
+  300,
+  400,
+  500,
+  600,
+  700,
+  800,
+  900,
+  1000,   // 10
+  1900,
+  2800,
+  3700,
+  4600,
+  5500,
+  6400,
+  7300,
+  8200,
+  9100,
+  10000,  // 20
+  11000,
+  12000,
+  13000,
+  14000,
+  15000,
+  16000,
+  17000,
+  18000,
+  19000,
+  20000,  // 30
+};
+
+uint8_t enable = 0;              // 0 or 1
+uint8_t silenceDecisecsMax = 0;  // 0 to 15
 
 Preferences preferences;
 
@@ -106,7 +141,7 @@ void IRAM_ATTR processVolume(void)
 //  digitalWrite(AUX5, 1);
 
   // Turn off LED
-  uint16_t ledHoldTime = (VOL_NOM == volumeStep) ? 1000 : 100;
+  uint16_t ledHoldTime = (VOL_STEP_NOM == volumeStep) ? 1000 : 100;
   if((millis() - pressTime) > ledHoldTime)
   {
     digitalWrite(LEDB, 0);
@@ -150,7 +185,7 @@ void IRAM_ATTR processVolume(void)
   if((buttonsPressed ^ oldButtonsPressed) & (buttonsPressed & VOL_UP_BUTTON))
   {
     pressTime = millis();
-    if(volumeStep < VOL_MAX)
+    if(volumeStep < VOL_STEP_MAX)
     {
       volumeStep++;
       preferences.putUChar("volume", volumeStep);
@@ -217,20 +252,7 @@ void IRAM_ATTR processVolume(void)
   // Process volume
   uint16_t deltaVolume;
   uint16_t volumeTarget;
-  if(0 == volumeStep)
-  {
-    volumeTarget = 0;
-  }
-  else if((1 <= volumeStep) && (volumeStep <= 10))
-  {
-    //  Logarithmic attenuation volume (20 to 10240)
-    volumeTarget = 10 * (1 << volumeStep) * enable;
-  }
-  else
-  {
-    //  Linear amplification volume (11264 to 15360)
-    volumeTarget = (10 + 2*(volumeStep-10)) * 1024 * enable;
-  }
+  volumeTarget = volumeLevels[volumeStep];
 
   if(volume < volumeTarget)
   {
@@ -369,7 +391,7 @@ void play(Sound *wavSound)
 //      digitalWrite(AUX3, 1);
       // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
       sampleValue = *((int16_t *)(fileBuffer+i));
-      int32_t adjustedValue = sampleValue * volume / (1024 * VOL_NOM);
+      int32_t adjustedValue = sampleValue * volume / volumeLevels[VOL_STEP_NOM];
       if(adjustedValue > 32767)
         sampleValue = 32767;
       else if(adjustedValue < -32768)
