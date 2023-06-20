@@ -1,6 +1,6 @@
 #include <SPI.h>
 #include <SD.h>
-#include <I2S.h>
+#include "driver/i2s.h"
 #include <Preferences.h>
 #include <vector>
 #include <strings.h>
@@ -17,20 +17,21 @@
 #include "squeal/flangeClip08.h"
 #include "squeal/flangeClip09.h"
 #include "squeal/flangeClip10.h"
-//#include "squeal/flangeClip11.h"
+#include "squeal/flangeClip11.h"
 #include "squeal/flangeClip12.h"
 #include "squeal/flangeClip13.h"
 #include "squeal/flangeClip14.h"
 #include "squeal/flangeClip15.h"
-//#include "squeal/flangeClip16.h"
+#include "squeal/flangeClip16.h"
 //#include "squeal/flangeClip17.h"
 //#include "squeal/flangeClip18.h"
 
-// Samples
-#define AUDIO_BUFFER_SIZE 1024
+// Samples for each buffer
+#define AUDIO_BUFFER_SIZE 512
+#define AUDIO_BUFFER_NUM  4
 
-// Bytes - needs to be 2x audio buffer since audio buffer is 16-bit samples
-#define FILE_BUFFER_SIZE (AUDIO_BUFFER_SIZE * 2)
+// Bytes
+#define FILE_BUFFER_SIZE 2048
 
 // Volume
 #define VOL_MAX       15
@@ -102,7 +103,7 @@ void IRAM_ATTR processVolume(void)
   static unsigned long pressTime = 0;
   uint8_t inputStatus = 0;
 
-  digitalWrite(AUX5, 1);
+//  digitalWrite(AUX5, 1);
 
   // Turn off LED
   uint16_t ledHoldTime = (VOL_NOM == volumeStep) ? 1000 : 100;
@@ -249,7 +250,7 @@ void IRAM_ATTR processVolume(void)
   }
 
   oldButtonsPressed = buttonsPressed;
-  digitalWrite(AUX5, 0);
+//  digitalWrite(AUX5, 0);
 }
 
 void setup()
@@ -316,48 +317,86 @@ void setup()
 
 void play(Sound *wavSound)
 {
-  int i;
+  size_t i;
   size_t bytesRead;
   uint8_t fileBuffer[FILE_BUFFER_SIZE];
   int16_t sampleValue;
+  uint32_t outputValue;
+  size_t bytesWritten;
 
   wavSound->open();
-  I2S.setSckPin(I2S_BCLK);
-  I2S.setFsPin(I2S_LRCLK);
-  I2S.setDataPin(I2S_DATA);
-  I2S.setBufferSize(AUDIO_BUFFER_SIZE);
+  
+  i2s_port_t i2s_num = I2S_NUM_0;
+  i2s_config_t i2s_config = {
+      .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX),
+      .sample_rate = wavSound->getSampleRate(),
+      .bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT,
+      .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
+      .communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_I2S,
+      .intr_alloc_flags = ESP_INTR_FLAG_LEVEL1,
+      .dma_buf_count = AUDIO_BUFFER_NUM,
+      .dma_buf_len = AUDIO_BUFFER_SIZE,
+      .use_apll = 0,
+      .tx_desc_auto_clear = true,
+      .fixed_mclk = -1,
+      .mclk_multiple = I2S_MCLK_MULTIPLE_DEFAULT,
+      .bits_per_chan = I2S_BITS_PER_CHAN_DEFAULT,
+  };
 
-  if(!I2S.begin(I2S_PHILIPS_MODE, wavSound->getSampleRate(), 16))
-  {
-    Serial.println("Failed to initialize I2S!");
-    return;  // Fail and try the next one
-  }
+  i2s_pin_config_t pin_config = {
+      .mck_io_num = I2S_PIN_NO_CHANGE,
+      .bck_io_num = I2S_BCLK,
+      .ws_io_num = I2S_LRCLK,
+      .data_out_num = I2S_DATA,
+      .data_in_num = I2S_PIN_NO_CHANGE,
+  };
+
+  i2s_driver_install(i2s_num, &i2s_config, 0, NULL);
+  i2s_set_pin(i2s_num, &pin_config);
+
   digitalWrite(I2S_SD, 1);  // Enable amplifier
+//  digitalWrite(AUX4, 1);
 
   while(wavSound->available())
   {
-    // Audio buffer samples are in 16-bit chunks, so multiply by two to get # of bytes to read
 //    digitalWrite(AUX1, 1);
     bytesRead = wavSound->read(fileBuffer, (size_t)FILE_BUFFER_SIZE);
 //    digitalWrite(AUX1, 0);
 //    digitalWrite(AUX2, 1);
+    // Audio buffer samples are in 16-bit chunks, so step by two
     for(i=0; i<bytesRead; i+=2)
     {
-//      digitalWrite(AUX3, 1);  // Note: causes some audio interference - crosstalk?
+//      digitalWrite(AUX3, 1);
       // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
       sampleValue = *((int16_t *)(fileBuffer+i));
-      sampleValue = sampleValue * volume / (1024 * VOL_NOM);
-      // Write twice (left & right)
-      I2S.write(sampleValue);
-      I2S.write(sampleValue);
+      int32_t adjustedValue = sampleValue * volume / (1024 * VOL_NOM);
+      if(adjustedValue > 32767)
+        sampleValue = 32767;
+      else if(adjustedValue < -32768)
+        sampleValue = -32768;
+      else
+        sampleValue = adjustedValue;
+      // Combine into 32 bit word (left & right)
+      outputValue = (sampleValue<<16) | (sampleValue & 0xffff);
+      i2s_write(i2s_num, &outputValue, 4, &bytesWritten, portMAX_DELAY);
 //      digitalWrite(AUX3, 0);
     }
 //    digitalWrite(AUX2, 0);
   }
-  I2S.flush();
-  delay(2 * 1000 * AUDIO_BUFFER_SIZE / wavSound->getSampleRate());  // Let buffer finish, length of 2 audio buffers in millisecs
+
+  // Fill the buffer with zeros.
+  for(i=0; i<(AUDIO_BUFFER_NUM*AUDIO_BUFFER_SIZE); i++)
+  {
+      // Fill all buffers with zeros
+//      digitalWrite(AUX5, 1);
+      outputValue = 0;
+      i2s_write(i2s_num, &outputValue, 4, &bytesWritten, portMAX_DELAY);
+//      digitalWrite(AUX5, 0);
+  }
+  // By the time we're done, it must be playing "zero", so it's safe to disable the amplifier
   digitalWrite(I2S_SD, 0);  // Disable amplifier
-  I2S.end();
+//  digitalWrite(AUX4, 0);
+  i2s_driver_uninstall(i2s_num);
   wavSound->close();
 }
 
@@ -498,14 +537,15 @@ void loop()
     squealSounds.push_back(new MemSound(8, flangeClip08_wav, flangeClip08_wav_len, 16000));
     squealSounds.push_back(new MemSound(9, flangeClip09_wav, flangeClip09_wav_len, 16000));
     squealSounds.push_back(new MemSound(10, flangeClip10_wav, flangeClip10_wav_len, 16000));
-//    squealSounds.push_back(new MemSound(11, flangeClip11_wav, flangeClip11_wav_len, 16000));
+    squealSounds.push_back(new MemSound(11, flangeClip11_wav, flangeClip11_wav_len, 16000));
     squealSounds.push_back(new MemSound(12, flangeClip12_wav, flangeClip12_wav_len, 16000));
     squealSounds.push_back(new MemSound(13, flangeClip13_wav, flangeClip13_wav_len, 16000));
     squealSounds.push_back(new MemSound(14, flangeClip14_wav, flangeClip14_wav_len, 16000));
     squealSounds.push_back(new MemSound(15, flangeClip15_wav, flangeClip15_wav_len, 16000));
-//    squealSounds.push_back(new MemSound(16, flangeClip16_wav, flangeClip16_wav_len, 16000));
+    squealSounds.push_back(new MemSound(16, flangeClip16_wav, flangeClip16_wav_len, 16000));
 //    squealSounds.push_back(new MemSound(17, flangeClip17_wav, flangeClip17_wav_len, 16000));
 //    squealSounds.push_back(new MemSound(18, flangeClip18_wav, flangeClip18_wav_len, 16000));
+
     Serial.print("Using built-in sounds (");
     Serial.print(squealSounds.size());
     Serial.println(")");

@@ -13,7 +13,7 @@ REV    := $(shell ./git-revision.sh)
 
 #BOARD     = esp32:esp32:esp32s2:CDCOnBoot=cdc,UploadMode=cdc,PSRAM=enabled,PartitionScheme=huge_app
 BOARD     = esp32:esp32:esp32s2:CDCOnBoot=cdc,UploadMode=cdc,PSRAM=enabled
-OPTIONS   = --build-property upload.maximum_size=4063232 --build-property compiler.cpp.extra_flags='-DGIT_REV=0x$(GITREV)L -DVERSION_STRING="$(REV)"'
+OPTIONS   = --build-property upload.maximum_size=4063232 --build-property compiler.cpp.extra_flags='-DGIT_REV=0x$(GITREV)L -DVERSION_STRING="$(REV)"' --build-property compiler.optimization_flags=-O2
 PORT      = /dev/ttyACM0
 
 ARDUINO   = arduino-cli
