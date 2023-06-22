@@ -252,7 +252,7 @@ void IRAM_ATTR processVolume(void)
   // Process volume
   uint16_t deltaVolume;
   uint16_t volumeTarget;
-  volumeTarget = volumeLevels[volumeStep];
+  volumeTarget = volumeLevels[volumeStep] * enable;
 
   if(volume < volumeTarget)
   {
