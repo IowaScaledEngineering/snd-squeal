@@ -323,7 +323,7 @@ void setup()
   Serial.println(GIT_REV, HEX);
 
   preferences.begin("squeal", false);
-  volumeStep = preferences.getUChar("volume", 10);
+  volumeStep = preferences.getUChar("volume", VOL_STEP_NOM);
   Serial.print("Volume: ");
   Serial.println(volumeStep);
 
