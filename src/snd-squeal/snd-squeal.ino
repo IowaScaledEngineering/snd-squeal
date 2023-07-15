@@ -68,11 +68,11 @@
 // Volume
 #define VOL_STEP_MAX  30
 #define VOL_STEP_NOM  20
-#define VOL_UP_COEF   10
-#define VOL_DN_COEF   8
 
 uint8_t volumeStep = 0;
 uint16_t volume = 0;
+uint8_t volumeUpCoef = 0;
+uint8_t volumeDownCoef = 0;
 
 uint16_t volumeLevels[] = {
   0,      // 0
@@ -238,6 +238,7 @@ void IRAM_ATTR processVolume(void)
         Serial.print(silenceDecisecsMax/10.0, 1);
         Serial.println("s");
         break;
+
       case 's':
         if(silenceDecisecsMin < silenceDecisecsMax)
         {
@@ -258,6 +259,45 @@ void IRAM_ATTR processVolume(void)
         Serial.print(silenceDecisecsMin/10.0, 1);
         Serial.println("s");
         break;
+
+      case 'd':
+        if(volumeUpCoef < 255)
+        {
+          volumeUpCoef++;
+          preferences.putUChar("volumeUp", volumeUpCoef);
+        }
+        Serial.print("Volume Up Coef: ");
+        Serial.println(volumeUpCoef);
+        break;
+      case 'c':
+        if(volumeUpCoef > 1)
+        {
+          volumeUpCoef--;
+          preferences.putUChar("volumeUp", volumeUpCoef);
+        }
+        Serial.print("Volume Up Coef: ");
+        Serial.println(volumeUpCoef);
+        break;
+
+      case 'f':
+        if(volumeDownCoef < 255)
+        {
+          volumeDownCoef++;
+          preferences.putUChar("volumeDown", volumeDownCoef);
+        }
+        Serial.print("Volume Down Coef: ");
+        Serial.println(volumeDownCoef);
+        break;
+      case 'v':
+        if(volumeDownCoef > 1)
+        {
+          volumeDownCoef--;
+          preferences.putUChar("volumeDown", volumeDownCoef);
+        }
+        Serial.print("Volume Down Coef: ");
+        Serial.println(volumeDownCoef);
+        break;
+
       case 'q':
         restart = true;
         break;
@@ -283,17 +323,17 @@ void IRAM_ATTR processVolume(void)
   if(volume < volumeTarget)
   {
     deltaVolume = (volumeTarget - volume);
-    if((deltaVolume > 0) && (deltaVolume < VOL_UP_COEF))
-      deltaVolume = VOL_UP_COEF;  // Make sure it goes all the way to min or max
-    volume += deltaVolume  / VOL_UP_COEF;
+    if((deltaVolume > 0) && (deltaVolume < volumeUpCoef))
+      deltaVolume = volumeUpCoef;  // Make sure it goes all the way to min or max
+    volume += deltaVolume  / volumeUpCoef;
 //    Serial.println(volume);
   }
   else if(volume > volumeTarget)
   {
     deltaVolume = (volume - volumeTarget);
-    if((deltaVolume > 0) && (deltaVolume < VOL_DN_COEF))
-      deltaVolume = VOL_DN_COEF;  // Make sure it goes all the way to min or max
-    volume -= deltaVolume / VOL_DN_COEF;
+    if((deltaVolume > 0) && (deltaVolume < volumeDownCoef))
+      deltaVolume = volumeDownCoef;  // Make sure it goes all the way to min or max
+    volume -= deltaVolume / volumeDownCoef;
 //    Serial.println(volume);
   }
 
@@ -450,6 +490,7 @@ void loop()
   Serial.print("Git Rev: ");
   Serial.println(GIT_REV, HEX);
 
+  // Read configuration
   preferences.begin("squeal", false);
   volumeStep = preferences.getUChar("volume", VOL_STEP_NOM);
   Serial.print("Volume: ");
@@ -464,6 +505,24 @@ void loop()
   Serial.print("Silence Min: ");
   Serial.print(silenceDecisecsMin/10.0, 1);
   Serial.println("s");
+
+  volumeUpCoef = preferences.getUChar("volumeUp", 10);
+  if(0 == volumeUpCoef)
+  {
+    volumeUpCoef = 1;
+    preferences.putUChar("volumeUp", volumeUpCoef);
+  }
+  Serial.print("Volume Up Coef: ");
+  Serial.println(volumeUpCoef);
+
+  volumeDownCoef = preferences.getUChar("volumeDown", 8);
+  if(0 == volumeDownCoef)
+  {
+    volumeDownCoef = 1;
+    preferences.putUChar("volumeDown", volumeDownCoef);
+  }
+  Serial.print("Volume Down Coef: ");
+  Serial.println(volumeDownCoef);
 
   if(SD.begin())
   {
@@ -615,20 +674,7 @@ void loop()
     Serial.print("Playing... ");
     Serial.println(sampleNum);
     play(squealSounds[sampleNum]);
-    if(!usingSdSounds)
-    {
-      // Add some silence
-      uint8_t silenceDecisecs = random(silenceDecisecsMin, silenceDecisecsMax);
-      Serial.print("Silence... ");
-      Serial.print(silenceDecisecs/10.0, 1);
-      Serial.println("s");
-      for(i=0; i<silenceDecisecs; i++)
-      {
-        Serial.print(".");
-        delay(100);
-      }
-      Serial.println("");
-    }
+
     if(restart)
     {
       restart = false;
@@ -636,5 +682,17 @@ void loop()
       squealSounds.clear();
       break;  // Restart the loop() function
     }
+
+    // Add some silence
+    uint8_t silenceDecisecs = random(silenceDecisecsMin, silenceDecisecsMax);
+    Serial.print("Silence... ");
+    Serial.print(silenceDecisecs/10.0, 1);
+    Serial.println("s");
+    for(i=0; i<silenceDecisecs; i++)
+    {
+      Serial.print(".");
+      delay(100);
+    }
+    Serial.println("");
   }
 }
