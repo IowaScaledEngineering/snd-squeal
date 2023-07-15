@@ -108,8 +108,11 @@ uint16_t volumeLevels[] = {
   20000,  // 30
 };
 
+bool restart = false;
+
 uint8_t enable = 0;              // 0 or 1
-uint8_t silenceDecisecsMax = 0;  // 0 to 15
+uint8_t silenceDecisecsMax = 0;
+uint8_t silenceDecisecsMin = 0;
 
 Preferences preferences;
 
@@ -219,21 +222,44 @@ void IRAM_ATTR processVolume(void)
         if(silenceDecisecsMax < 255)
         {
           silenceDecisecsMax++;
-          preferences.putUChar("silence", silenceDecisecsMax);
+          preferences.putUChar("silenceMax", silenceDecisecsMax);
         }
         Serial.print("Silence Max: ");
         Serial.print(silenceDecisecsMax/10.0, 1);
         Serial.println("s");
         break;
       case 'z':
-        if(silenceDecisecsMax > 0)
+        if(silenceDecisecsMax > silenceDecisecsMin)
         {
           silenceDecisecsMax--;
-          preferences.putUChar("silence", silenceDecisecsMax);
+          preferences.putUChar("silenceMax", silenceDecisecsMax);
         }
         Serial.print("Silence Max: ");
         Serial.print(silenceDecisecsMax/10.0, 1);
         Serial.println("s");
+        break;
+      case 's':
+        if(silenceDecisecsMin < silenceDecisecsMax)
+        {
+          silenceDecisecsMin++;
+          preferences.putUChar("silenceMin", silenceDecisecsMin);
+        }
+        Serial.print("Silence Min: ");
+        Serial.print(silenceDecisecsMin/10.0, 1);
+        Serial.println("s");
+        break;
+      case 'x':
+        if(silenceDecisecsMin > 0)
+        {
+          silenceDecisecsMin--;
+          preferences.putUChar("silenceMin", silenceDecisecsMin);
+        }
+        Serial.print("Silence Min: ");
+        Serial.print(silenceDecisecsMin/10.0, 1);
+        Serial.println("s");
+        break;
+      case 'q':
+        restart = true;
         break;
     }
   }
@@ -300,37 +326,6 @@ void setup()
   pinMode(AUX3, OUTPUT);
   pinMode(AUX4, OUTPUT);
   pinMode(AUX5, OUTPUT);
-
-  delay(1000);
-  Serial.print('.');
-  delay(1000);
-  Serial.print('.');
-  delay(1000);
-  Serial.println('.');
-
-  Serial.println("     _____   ____   _    _  ______            _       ______  _____");
-  Serial.println("    / ____| / __ \\ | |  | ||  ____|    /\\    | |     |  ____||  __ \\");
-  Serial.println("   | (___  | |  | || |  | || |__      /  \\   | |     | |__   | |__) |");
-  Serial.println("    \\___ \\ | |  | || |  | ||  __|    / /\\ \\  | |     |  __|  |  _  /");
-  Serial.println("    ____) || |__| || |__| || |____  / ____ \\ | |____ | |____ | | \\ \\");
-  Serial.println("   |_____/  \\___\\_\\ \\____/ |______|/_/    \\_\\|______||______||_|  \\_\\");
-  Serial.println("\nM O T I O N   A C T I V A T E D   F L A N G E   S Q U E A L   S Y S T E M\n");
-
-  Serial.print("Version: ");
-  Serial.println(VERSION_STRING);
-
-  Serial.print("Git Rev: ");
-  Serial.println(GIT_REV, HEX);
-
-  preferences.begin("squeal", false);
-  volumeStep = preferences.getUChar("volume", VOL_STEP_NOM);
-  Serial.print("Volume: ");
-  Serial.println(volumeStep);
-
-  silenceDecisecsMax = preferences.getUChar("silence", 50);
-  Serial.print("Silence Max: ");
-  Serial.print(silenceDecisecsMax/10.0, 1);
-  Serial.println("s");
 
   timer = timerBegin(0, 80, true);  // Timer 0, 80x prescaler = 1us
   timerAttachInterrupt(timer, &processVolume, false);  // level triggered
@@ -404,6 +399,8 @@ void play(Sound *wavSound)
 //      digitalWrite(AUX3, 0);
     }
 //    digitalWrite(AUX2, 0);
+    if(restart)
+      break;  // Stop playing and return to the main loop
   }
 
   // Fill the buffer with zeros.
@@ -436,6 +433,37 @@ void loop()
   uint8_t i;
 
   std::vector<Sound *> squealSounds;
+
+  timerAlarmDisable(timer);
+
+  Serial.println("     _____   ____   _    _  ______            _       ______  _____");
+  Serial.println("    / ____| / __ \\ | |  | ||  ____|    /\\    | |     |  ____||  __ \\");
+  Serial.println("   | (___  | |  | || |  | || |__      /  \\   | |     | |__   | |__) |");
+  Serial.println("    \\___ \\ | |  | || |  | ||  __|    / /\\ \\  | |     |  __|  |  _  /");
+  Serial.println("    ____) || |__| || |__| || |____  / ____ \\ | |____ | |____ | | \\ \\");
+  Serial.println("   |_____/  \\___\\_\\ \\____/ |______|/_/    \\_\\|______||______||_|  \\_\\");
+  Serial.println("\nM O T I O N   A C T I V A T E D   F L A N G E   S Q U E A L   S Y S T E M\n");
+
+  Serial.print("Version: ");
+  Serial.println(VERSION_STRING);
+
+  Serial.print("Git Rev: ");
+  Serial.println(GIT_REV, HEX);
+
+  preferences.begin("squeal", false);
+  volumeStep = preferences.getUChar("volume", VOL_STEP_NOM);
+  Serial.print("Volume: ");
+  Serial.println(volumeStep);
+
+  silenceDecisecsMax = preferences.getUChar("silenceMax", 50);
+  Serial.print("Silence Max: ");
+  Serial.print(silenceDecisecsMax/10.0, 1);
+  Serial.println("s");
+
+  silenceDecisecsMin = preferences.getUChar("silenceMin", 0);
+  Serial.print("Silence Min: ");
+  Serial.print(silenceDecisecsMin/10.0, 1);
+  Serial.println("s");
 
   if(SD.begin())
   {
@@ -590,7 +618,7 @@ void loop()
     if(!usingSdSounds)
     {
       // Add some silence
-      uint8_t silenceDecisecs = random(0, silenceDecisecsMax);
+      uint8_t silenceDecisecs = random(silenceDecisecsMin, silenceDecisecsMax);
       Serial.print("Silence... ");
       Serial.print(silenceDecisecs/10.0, 1);
       Serial.println("s");
@@ -600,6 +628,13 @@ void loop()
         delay(100);
       }
       Serial.println("");
+    }
+    if(restart)
+    {
+      restart = false;
+      Serial.print("\n*** Restarting ***\n\n");
+      squealSounds.clear();
+      break;  // Restart the loop() function
     }
   }
 }
