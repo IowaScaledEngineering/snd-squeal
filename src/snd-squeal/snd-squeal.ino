@@ -4,6 +4,10 @@
 #include <Preferences.h>
 #include <vector>
 #include <strings.h>
+#include "esp_task_wdt.h"
+
+// 10 sec WDT
+#define WDT_TIMEOUT 10
 
 #include "sound.h"
 
@@ -367,6 +371,10 @@ void setup()
   pinMode(AUX4, OUTPUT);
   pinMode(AUX5, OUTPUT);
 
+  esp_task_wdt_init(WDT_TIMEOUT, true);  // 1s timeout
+  esp_task_wdt_add(NULL); //add current thread to WDT watch
+  esp_task_wdt_reset();
+
   timer = timerBegin(0, 80, true);  // Timer 0, 80x prescaler = 1us
   timerAttachInterrupt(timer, &processVolume, false);  // level triggered
   timerAlarmWrite(timer, 10000, true);  // 80MHz / 80 / 10000 = 10ms, autoreload
@@ -380,6 +388,8 @@ void play(Sound *wavSound)
   int16_t sampleValue;
   uint32_t outputValue;
   size_t bytesWritten;
+
+  esp_task_wdt_reset();
 
   wavSound->open();
   
@@ -416,6 +426,7 @@ void play(Sound *wavSound)
 
   while(wavSound->available())
   {
+    esp_task_wdt_reset();
 //    digitalWrite(AUX1, 1);
     bytesRead = wavSound->read(fileBuffer, (size_t)FILE_BUFFER_SIZE);
 //    digitalWrite(AUX1, 0);
@@ -424,6 +435,7 @@ void play(Sound *wavSound)
     for(i=0; i<bytesRead; i+=2)
     {
 //      digitalWrite(AUX3, 1);
+      esp_task_wdt_reset();
       // File is read on a byte basis, so convert into int16 samples, and step every 2 bytes
       sampleValue = *((int16_t *)(fileBuffer+i));
       int32_t adjustedValue = sampleValue * volume / volumeLevels[VOL_STEP_NOM];
@@ -448,6 +460,7 @@ void play(Sound *wavSound)
   {
       // Fill all buffers with zeros
 //      digitalWrite(AUX5, 1);
+      esp_task_wdt_reset();
       outputValue = 0;
       i2s_write(i2s_num, &outputValue, 4, &bytesWritten, portMAX_DELAY);
 //      digitalWrite(AUX5, 0);
@@ -474,6 +487,7 @@ void loop()
 
   std::vector<Sound *> squealSounds;
 
+  esp_task_wdt_reset();
   timerAlarmDisable(timer);
 
   Serial.println("     _____   ____   _    _  ______            _       ______  _____");
@@ -524,11 +538,13 @@ void loop()
   Serial.print("Volume Down Coef: ");
   Serial.println(volumeDownCoef);
 
+  esp_task_wdt_reset();
   if(SD.begin())
   {
     rootDir = SD.open("/");
     while(true)
     {
+      esp_task_wdt_reset();
       wavFile = rootDir.openNextFile();
 
       if (!wavFile)
@@ -623,6 +639,8 @@ void loop()
 
   Serial.println("");
 
+  esp_task_wdt_reset();
+
   if(usingSdSounds)
   {
     Serial.print("Using SD card sounds (");
@@ -630,9 +648,13 @@ void loop()
     Serial.println(")");
     // Quadruple blink blue
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    esp_task_wdt_reset();
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    esp_task_wdt_reset();
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    esp_task_wdt_reset();
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    esp_task_wdt_reset();
   }
   else
   {
@@ -660,13 +682,16 @@ void loop()
     Serial.println(")");
     // Double blink blue
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    esp_task_wdt_reset();
     digitalWrite(LEDA, 1); delay(250); digitalWrite(LEDA, 0); delay(250);
+    esp_task_wdt_reset();
   }
 
   timerAlarmEnable(timer);
 
   while(1)
   {
+    esp_task_wdt_reset();
     Serial.print("Heap free: ");
     Serial.println(esp_get_free_heap_size());
 
@@ -690,6 +715,7 @@ void loop()
     Serial.println("s");
     for(i=0; i<silenceDecisecs; i++)
     {
+      esp_task_wdt_reset();
       Serial.print(".");
       delay(100);
     }
