@@ -137,6 +137,70 @@ uint8_t debounce(uint8_t debouncedState, uint8_t newInputs)
   return(debouncedState);
 }
 
+char* rtrim(char* in)
+{
+  char* endPtr = in + strlen(in) - 1;
+  while (endPtr >= in && isspace(*endPtr))
+    *endPtr-- = 0;
+
+  return in;
+}
+
+char* ltrim(char* in)
+{
+  char* startPtr = in;
+  uint32_t bytesToMove = strlen(in);
+  while(isspace(*startPtr))
+    startPtr++;
+  bytesToMove -= (startPtr - in);
+  memmove(in, startPtr, bytesToMove);
+  in[bytesToMove] = 0;
+  return in;
+}
+
+bool configKeyValueSplit(char* key, uint32_t keySz, char* value, uint32_t valueSz, const char* configLine)
+{
+  char lineBuffer[256];
+  char* separatorPtr = NULL;
+  char* lineBufferPtr = NULL;
+  uint32_t bytesToCopy;
+
+  separatorPtr = strchr(configLine, '=');
+  if (NULL == separatorPtr)
+    return false;
+
+  memset(key, 0, keySz);
+  memset(value, 0, valueSz);
+
+  // Copy the part that's eligible to be a key into the line buffer
+  bytesToCopy = separatorPtr - configLine;
+  if (bytesToCopy > sizeof(lineBuffer)-1)
+    bytesToCopy = sizeof(lineBuffer);
+  memset(lineBuffer, 0, sizeof(lineBuffer));
+  strncpy(lineBuffer, configLine, bytesToCopy);
+
+  lineBufferPtr = ltrim(rtrim(lineBuffer));
+  if (0 == strlen(lineBufferPtr) || '#' == lineBufferPtr[0])
+    return false;
+
+  strncpy(key, lineBufferPtr, keySz);
+
+//  bytesToCopy = strlen(separatorPtr+1);
+//  if (bytesToCopy > sizeof(lineBuffer)-1)
+//    bytesToCopy = sizeof(lineBuffer);
+  memset(lineBuffer, 0, sizeof(lineBuffer));
+  // Changed to sizeof(lineBuffer)-1 below instead of bytesToCopy due to -Werror=stringop-overflow and -Werror=stringop-truncation
+  strncpy(lineBuffer, separatorPtr+1, sizeof(lineBuffer)-1);
+  lineBufferPtr = ltrim(rtrim(lineBuffer));
+  if (0 == strlen(lineBufferPtr))
+  {
+    memset(key, 0, keySz);
+    return false;
+  }
+  strncpy(value, lineBufferPtr, valueSz);
+  return true;
+}
+
 hw_timer_t * timer = NULL;
 
 void IRAM_ATTR processVolume(void)
@@ -504,21 +568,11 @@ void loop()
   Serial.print("Git Rev: ");
   Serial.println(GIT_REV, HEX);
 
-  // Read configuration
+  // Read NVM configuration
   preferences.begin("squeal", false);
   volumeStep = preferences.getUChar("volume", VOL_STEP_NOM);
-  Serial.print("Volume: ");
-  Serial.println(volumeStep);
-
   silenceDecisecsMax = preferences.getUChar("silenceMax", 50);
-  Serial.print("Silence Max: ");
-  Serial.print(silenceDecisecsMax/10.0, 1);
-  Serial.println("s");
-
   silenceDecisecsMin = preferences.getUChar("silenceMin", 0);
-  Serial.print("Silence Min: ");
-  Serial.print(silenceDecisecsMin/10.0, 1);
-  Serial.println("s");
 
   volumeUpCoef = preferences.getUChar("volumeUp", 10);
   if(0 == volumeUpCoef)
@@ -526,8 +580,6 @@ void loop()
     volumeUpCoef = 1;
     preferences.putUChar("volumeUp", volumeUpCoef);
   }
-  Serial.print("Volume Up Coef: ");
-  Serial.println(volumeUpCoef);
 
   volumeDownCoef = preferences.getUChar("volumeDown", 8);
   if(0 == volumeDownCoef)
@@ -535,12 +587,46 @@ void loop()
     volumeDownCoef = 1;
     preferences.putUChar("volumeDown", volumeDownCoef);
   }
-  Serial.print("Volume Down Coef: ");
-  Serial.println(volumeDownCoef);
 
   esp_task_wdt_reset();
+
+  // Check SD card
   if(SD.begin())
   {
+    // Check for and read config file
+    File f = SD.open("/config.txt");
+    if (f)
+    {
+      while(f.available())
+      {
+        char keyStr[128];
+        char valueStr[128];
+        bool kvFound = configKeyValueSplit(keyStr, sizeof(keyStr), valueStr, sizeof(valueStr), f.readStringUntil('\n').c_str());
+        if (!kvFound)
+          continue;
+
+        // Okay, looks like we have a valid key/value pair, see if it's something we care about
+        if (0 == strcmp(keyStr, "silenceMax"))
+        {
+          silenceDecisecsMax = atoi(valueStr);
+        }
+        else if (0 == strcmp(keyStr, "silenceMin"))
+        {
+          silenceDecisecsMin = atoi(valueStr);
+        }
+        else if (0 == strcmp(keyStr, "volumeUp"))
+        {
+          volumeUpCoef = atoi(valueStr);
+        }
+        else if (0 == strcmp(keyStr, "volumeDown"))
+        {
+          volumeDownCoef = atoi(valueStr);
+        }
+      }
+    }
+    f.close();
+
+    // Find WAV files
     rootDir = SD.open("/");
     while(true)
     {
@@ -553,7 +639,7 @@ void loop()
       }
       if(wavFile.isDirectory())
       {
-        Serial.print("  Skipping directory ");
+        Serial.print("  Skipping directory: ");
         Serial.println(wavFile.name());
       }
       else
@@ -637,6 +723,20 @@ void loop()
     rootDir.close();
   }
 
+  // Print configuration values
+  Serial.print("Volume: ");
+  Serial.println(volumeStep);
+  Serial.print("Silence Max: ");
+  Serial.print(silenceDecisecsMax/10.0, 1);
+  Serial.println("s");
+  Serial.print("Silence Min: ");
+  Serial.print(silenceDecisecsMin/10.0, 1);
+  Serial.println("s");
+  Serial.print("Volume Up Coef: ");
+  Serial.println(volumeUpCoef);
+  Serial.print("Volume Down Coef: ");
+  Serial.println(volumeDownCoef);
+
   Serial.println("");
 
   esp_task_wdt_reset();
@@ -695,10 +795,26 @@ void loop()
     Serial.print("Heap free: ");
     Serial.println(esp_get_free_heap_size());
 
-    uint8_t sampleNum = random(0, squealSounds.size());
+    // Don't play the same sample twice in a row
+    // Have to initialize to something, so will never play sample 255 first
+    // Can't be zero since it would never play anything with a single sample
+    static uint8_t lastSampleNum = 255;
+    uint8_t sampleNum;
+    sampleNum = random(0, squealSounds.size());
+    if(squealSounds.size() > 2)
+    {
+      // With three or more sounds, don't repeat the last one
+      while(sampleNum == lastSampleNum)
+      {
+        esp_task_wdt_reset();
+        sampleNum = random(0, squealSounds.size());
+        Serial.println("*");
+      }
+    }
     Serial.print("Playing... ");
     Serial.println(sampleNum);
     play(squealSounds[sampleNum]);
+    lastSampleNum = sampleNum;
 
     if(restart)
     {
