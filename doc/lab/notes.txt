@@ -1,0 +1,6 @@
+Squealer_ESU.png:
+Squealer_NCE.png:
+Yellow = VIN after diode
+Green = DCC
+Shows power rail with connected directly to DCC track voltage.  ESU system has RailCom
+cutout, thus more decay.  Playing a moderately loud section of music.
